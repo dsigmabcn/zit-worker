@@ -4,6 +4,7 @@ import runpod
 import base64
 from io import BytesIO
 from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, AutoencoderKL
+from transformers import AutoModel # Added this for Qwen
 
 pipe = None
 
@@ -19,14 +20,23 @@ def load_model():
         model_ckpt = os.path.join(base, "diffusion_models/z_image_turbo_bf16.safetensors")
         vae_ckpt = os.path.join(base, "vae/ae.safetensors")
         lora_path = os.path.join(base, "loras/pixel_art_style_z_image_turbo.safetensors")
+        text_encoder_path = os.path.join(base, "text_encoders/qwen_3_4b.safetensors")
+
+        text_encoder = AutoModel.from_pretrained(
+            text_encoder_path, 
+            torch_dtype=torch.bfloat16,
+            local_files_only=True
+        ).to("cuda")
 
         # 1. Load the main SDXL-based Pipeline
         # We use from_single_file because you have a standalone .safetensors file
         print(f"Loading main model: {model_ckpt}")
         pipe = StableDiffusionXLPipeline.from_single_file(
             model_ckpt,
+            text_encoder=text_encoder, # You MUST pass the encoder here
             torch_dtype=torch.bfloat16,
-            use_safetensors=True
+            use_safetensors=True,
+            local_files_only=True
         ).to("cuda")
 
         # 2. Load the custom VAE (ae.safetensors)
