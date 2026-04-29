@@ -11,7 +11,7 @@ def load_model():
     global pipe
     if pipe is None:
         # Check both the standard RunPod mount and your custom mount path
-        possible_roots = ["/runpod-volume/workspace", "/mnt/volume/workspace", "/workspace"]
+        possible_roots = ["/runpod-volume/workspace", "/mnt/volume/workspace", "/workspace","/runpod-volume"]
         base = None
         
         print("--- Diagnostic Search Starting ---")
