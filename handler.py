@@ -3,73 +3,64 @@ import torch
 import runpod
 import base64
 from io import BytesIO
-from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, AutoencoderKL
-from transformers import AutoModel # Added this for Qwen
+# Import the specific pipeline class for this model
+from diffusers import ZImagePipeline 
 
 pipe = None
 
 def load_model():
     global pipe
     if pipe is None:
-        # Based on your logs, the folders are directly in /runpod-volume
-        base = "/runpod-volume"
+        # Path to the folder where you ran snapshot_download
+        model_path = "/runpod-volume/models/z-image-turbo"
         
-        print(f"✅ Confirmed: Loading Z-Image Turbo components from {base}")
-        
-        # Set exact paths based on your verified directory structure
-        model_ckpt = os.path.join(base, "diffusion_models/z_image_turbo_bf16.safetensors")
-        vae_ckpt = os.path.join(base, "vae/ae.safetensors")
-        lora_path = os.path.join(base, "loras/pixel_art_style_z_image_turbo.safetensors")
-        text_encoder_path = os.path.join(base, "text_encoders/qwen_3_4b.safetensors")
+        print(f"✅ Loading Z-Image Turbo using ZImagePipeline from: {model_path}")
 
-        text_encoder = AutoModel.from_pretrained(
-            text_encoder_path, 
+        # Exact implementation from official docs
+        pipe = ZImagePipeline.from_pretrained(
+            model_path,
             torch_dtype=torch.bfloat16,
-            local_files_only=True
+            local_files_only=True,
+            low_cpu_mem_usage=False, # Set to False as per Zit docs for better stability
         ).to("cuda")
 
-        # 1. Load the main SDXL-based Pipeline
-        # We use from_single_file because you have a standalone .safetensors file
-        print(f"Loading main model: {model_ckpt}")
-        pipe = StableDiffusionXLPipeline.from_single_file(
-            model_ckpt,
-            text_encoder=text_encoder, # You MUST pass the encoder here
-            torch_dtype=torch.bfloat16,
-            use_safetensors=True,
-            local_files_only=True
-        ).to("cuda")
+        # Optional: Apply Flash Attention for speed if using 3090/4090/A-series
+        try:
+            pipe.transformer.set_attention_backend("flash")
+            print("⚡ Flash Attention enabled")
+        except Exception as e:
+            print(f"Flash Attention not available: {e}")
 
-        # 2. Load the custom VAE (ae.safetensors)
-        # Custom VAEs are critical for high-quality Turbo generation
-        if os.path.exists(vae_ckpt):
-            print(f"Loading custom VAE: {vae_ckpt}")
-            pipe.vae = AutoencoderKL.from_single_file(
-                vae_ckpt, 
-                torch_dtype=torch.bfloat16
-            ).to("cuda")
-
-        # 3. Apply the Pixel Art LoRA
+        # Optional: Load your Pixel Art LoRA
+        lora_path = "/runpod-volume/loras/pixel_art_style_z_image_turbo.safetensors"
         if os.path.exists(lora_path):
-            print(f"Applying LoRA weights: {lora_path}")
+            print(f"Applying LoRA: {lora_path}")
             pipe.load_lora_weights(lora_path)
             
-        print("🚀 Success: Model, VAE, and LoRA are fully loaded and ready!")
+        print("🚀 Success: Z-Image Pipeline is fully loaded!")
+
 def handler(job):
     load_model()
     job_input = job["input"]
     
     prompt = job_input.get("prompt", "A cinematic digital art piece")
-    steps = job_input.get("steps", 4)
-    cfg = job_input.get("guidance_scale", 1.5)
+    # Docs recommend 9 steps for 8 forwards
+    steps = job_input.get("steps", 9) 
+    # Docs explicitly say guidance_scale should be 0.0 for Turbo
+    cfg = job_input.get("guidance_scale", 0.0)
     
+    # Generate image using the exact parameters from the Z-Image docs
     with torch.inference_mode():
         image = pipe(
-            prompt=prompt, 
-            num_inference_steps=steps, 
-            guidance_scale=cfg
+            prompt=prompt,
+            height=1024,
+            width=1024,
+            num_inference_steps=steps,
+            guidance_scale=cfg,
+            generator=torch.Generator("cuda").manual_seed(job_input.get("seed", 42)),
         ).images[0]
     
-    # Convert image to Base64 for the API response
+    # Standard Base64 return for RunPod
     buffered = BytesIO()
     image.save(buffered, format="PNG")
     img_str = base64.b64encode(buffered.getvalue()).decode("utf-8")
