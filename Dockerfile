@@ -1,4 +1,5 @@
 FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
+ENV REBUILD_VERSION=1.0
 
 # Set python3.11 as the default python
 RUN ln -sf $(which python3.11) /usr/local/bin/python && \
