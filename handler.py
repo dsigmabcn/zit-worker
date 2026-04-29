@@ -3,7 +3,7 @@ import torch
 import runpod
 import base64
 from io import BytesIO
-from diffusers import DiffusionPipeline
+from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, AutoencoderKL
 
 # Model cache to prevent re-loading on every request
 pipe = None
@@ -11,25 +11,36 @@ pipe = None
 def load_model():
     global pipe
     if pipe is None:
-        # This MUST match the 'Mount Path' in your RunPod Template settings
-        base = "/mnt/volume"
+        # Use /mnt/volume/workspace because that is where your folders live
+        base = "/mnt/volume" 
         
-        print(f"Loading Z-Image Turbo from {base}...")
+        print(f"Loading Z-Image Turbo components from {base}...")
         
-        # Pointing to the specific subfolders you created
-        pipe = DiffusionPipeline.from_pretrained(
-            os.path.join(base, "diffusion_models"),
-            vae=os.path.join(base, "vae"),
-            text_encoder=os.path.join(base, "text_encoders"),
-            torch_dtype=torch.bfloat16, # Better for 3090/4090 performance
+        model_ckpt = os.path.join(base, "diffusion_models/z_image_turbo_bf16.safetensors")
+        vae_ckpt = os.path.join(base, "vae/ae.safetensors")
+        lora_path = os.path.join(base, "loras/pixel_art_style_z_image_turbo.safetensors")
+
+        # 1. Load the main model
+        pipe = StableDiffusionXLPipeline.from_single_file(
+            model_ckpt,
+            torch_dtype=torch.bfloat16,
             use_safetensors=True
         ).to("cuda")
 
-        # Load the Pixel Art LoRA if present
-        lora_path = os.path.join(base, "loras/pixel_art_style_z_image_turbo.safetensors")
+        # 2. Load the VAE separately (Crucial for Turbo models to look right)
+        if os.path.exists(vae_ckpt):
+            print("Loading custom VAE...")
+            pipe.vae = AutoencoderKL.from_single_file(
+                vae_ckpt, 
+                torch_dtype=torch.bfloat16
+            ).to("cuda")
+
+        # 3. Load LoRA
         if os.path.exists(lora_path):
             print("Applying LoRA...")
             pipe.load_lora_weights(lora_path)
+            
+        print("Model loaded successfully!")
 
 def handler(job):
     load_model()
