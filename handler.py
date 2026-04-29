@@ -5,73 +5,61 @@ import base64
 from io import BytesIO
 from diffusers import DiffusionPipeline, StableDiffusionXLPipeline, AutoencoderKL
 
-# Model cache to prevent re-loading on every request
 pipe = None
 
 def load_model():
     global pipe
     if pipe is None:
-        # 1. Define all possible root locations for your files
-        # This covers the volume root, the workspace subfolder, and the standard Pod path
-        possible_bases = [
-            "/mnt/volume",
-            "/mnt/volume/workspace",
-            "/workspace"
-        ]
+        # Check both the standard RunPod mount and your custom mount path
+        possible_roots = ["/runpod-volume/workspace", "/mnt/volume/workspace", "/workspace"]
+        base = None
         
-        found_base = None
-        target_file = "diffusion_models/z_image_turbo_bf16.safetensors"
-
-        print("--- Diagnostic Path Search Starting ---")
-        for base in possible_bases:
-            full_path = os.path.join(base, target_file)
-            exists = os.path.exists(full_path)
-            print(f"Checking: {full_path} -> {'EXISTS' if exists else 'NOT FOUND'}")
-            
-            if exists:
-                found_base = base
+        print("--- Diagnostic Search Starting ---")
+        for root in possible_roots:
+            # We look for the main model file to verify the path
+            test_path = os.path.join(root, "diffusion_models/z_image_turbo_bf16.safetensors")
+            if os.path.exists(test_path):
+                base = root
+                print(f"✅ Found models at: {base}")
                 break
-        
-        # 2. If nothing is found, list the directory contents to the log to debug
-        if found_base is None:
-            print("❌ CRITICAL ERROR: Could not find the model file in any expected path.")
-            for base in possible_bases:
-                if os.path.exists(base):
-                    print(f"Contents of {base}: {os.listdir(base)}")
-                else:
-                    print(f"Directory {base} does not even exist.")
-            raise FileNotFoundError("Check RunPod logs for directory listing to fix paths.")
+            else:
+                print(f"❌ Not found at: {test_path}")
 
-        print(f"✅ Success! Using base path: {found_base}")
-        print("--- Diagnostic Path Search Finished ---")
+        if base is None:
+            print("❌ ERROR: Could not find model files. Listing /runpod-volume contents:")
+            if os.path.exists("/runpod-volume"):
+                print(os.listdir("/runpod-volume"))
+            raise FileNotFoundError("Model files not found. Check volume mount path.")
 
-        # 3. Set final paths based on the found base
-        model_ckpt = os.path.join(found_base, "diffusion_models/z_image_turbo_bf16.safetensors")
-        vae_ckpt = os.path.join(found_base, "vae/ae.safetensors")
-        lora_path = os.path.join(found_base, "loras/pixel_art_style_z_image_turbo.safetensors")
+        # Define specific file paths
+        model_ckpt = os.path.join(base, "diffusion_models/z_image_turbo_bf16.safetensors")
+        vae_ckpt = os.path.join(base, "vae/ae.safetensors")
+        lora_path = os.path.join(base, "loras/pixel_art_style_z_image_turbo.safetensors")
 
-        # 4. Load the Pipeline
-        print(f"Loading SDXL Pipeline from: {model_ckpt}")
+        print(f"Loading Z-Image Turbo (SDXL) from {model_ckpt}...")
+
+        # 1. Load the main Pipeline (Using from_single_file for your .safetensors structure)
         pipe = StableDiffusionXLPipeline.from_single_file(
             model_ckpt,
             torch_dtype=torch.bfloat16,
             use_safetensors=True
         ).to("cuda")
 
-        # 5. Load VAE
+        # 2. Load the custom VAE (ae.safetensors)
         if os.path.exists(vae_ckpt):
-            print(f"Loading custom VAE from: {vae_ckpt}")
+            print(f"Loading custom VAE from {vae_ckpt}...")
             pipe.vae = AutoencoderKL.from_single_file(
                 vae_ckpt, 
                 torch_dtype=torch.bfloat16
             ).to("cuda")
 
-        # 6. Load LoRA
+        # 3. Load the Pixel Art LoRA
         if os.path.exists(lora_path):
-            print(f"Applying LoRA from: {lora_path}")
+            print(f"Applying LoRA from {lora_path}...")
             pipe.load_lora_weights(lora_path)
-            
-        print("🚀 Model loaded and ready for inference!")
+
+        print("🚀 Success: Pipeline is fully loaded and ready!")
+
 def handler(job):
     load_model()
     job_input = job["input"]
