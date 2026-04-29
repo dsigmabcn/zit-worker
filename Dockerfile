@@ -5,6 +5,7 @@ RUN ln -sf $(which python3.11) /usr/local/bin/python && \
     ln -sf $(which python3.11) /usr/local/bin/python3
 
 RUN python -m pip install --upgrade pip
+RUN pip install uv
 
 # Install dependencies
 COPY requirements.txt /requirements.txt
