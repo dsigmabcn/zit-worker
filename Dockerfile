@@ -1,6 +1,11 @@
 #FROM runpod/pytorch:2.4.0-py3.11-cuda12.4.1-devel-ubuntu22.04
 FROM runpod/pytorch:2.8.0-py3.11-cuda12.8.1-cudnn-devel-ubuntu22.04
 
+# for caching/starting up
+#ENV HF_HOME=/runpod-volume/.cache/huggingface
+#ENV HF_HUB_CACHE=/runpod-volume/.cache/huggingface/hub
+
+
 # Set python3.11 as the default python
 #RUN ln -sf $(which python3.11) /usr/local/bin/python && \
 #    ln -sf $(which python3.11) /usr/local/bin/python3

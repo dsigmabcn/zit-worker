@@ -10,6 +10,23 @@ from diffusers import ZImagePipeline
 
 pipe = None
 
+def configure_hf_cache():
+    if os.path.isdir("/runpod-volume"):
+        cache_root = "/runpod-volume/.cache/huggingface"
+    else:
+        cache_root = "/tmp/.cache/huggingface"
+
+    hub_cache = os.path.join(cache_root, "hub")
+    os.makedirs(hub_cache, exist_ok=True)
+
+    os.environ["HF_HOME"] = cache_root
+    os.environ["HF_HUB_CACHE"] = hub_cache
+    print("HF_HOME =", os.environ["HF_HOME"])
+    print("HF_HUB_CACHE =", os.environ["HF_HUB_CACHE"])
+    print("Has /runpod-volume:", os.path.isdir("/runpod-volume"))
+
+
+
 def get_diagnostics():
     """Prints system telemetry to logs to check for bottlenecks."""
     print("--- System Diagnostics ---")
@@ -33,7 +50,7 @@ def check_disk_space(required_gb=25):
 def load_model():
     global pipe
     if pipe is None:
-        get_diagnostics() # Run diagnostics on startup
+        #get_diagnostics() # Run diagnostics on startup
         
         network_path = "/runpod-volume/models/z-image-turbo"
         local_path = "/models/z-image-turbo"
@@ -48,18 +65,7 @@ def load_model():
         if use_network:
             print("📁 Network drive detected with content.")
             # Try to move to local SSD for speed
-            if not os.path.exists(local_path):
-                if check_disk_space(required_gb=25):
-                    print("📦 Copying weights from Network to Local SSD...")
-                    os.makedirs("/models", exist_ok=True)
-                    shutil.copytree(network_path, local_path)
-                    load_source = local_path
-                else:
-                    print("⚠️ Not enough local space. Loading directly from Network Drive (slower).")
-                    load_source = network_path
-            else:
-                print("🚀 Local SSD weights found.")
-                load_source = local_path
+            load_source = network_path
         else:
             print("🌐 Network drive empty or missing. Falling back to Hugging Face download.")
             load_source = hf_repo
@@ -67,11 +73,13 @@ def load_model():
         # Load the pipeline
         print(f"🛰️ Loading Pipeline from: {load_source}")
         try:
+            configure_hf_cache()
             pipe = ZImagePipeline.from_pretrained(
                 load_source,
                 torch_dtype=torch.bfloat16,
                 # local_files_only must be False if we might pull from HF
-                local_files_only=(load_source != hf_repo),
+                #local_files_only=(load_source != hf_repo),
+                local_files_only=use_network,
                 low_cpu_mem_usage=False,
             )
             
@@ -85,6 +93,7 @@ def load_model():
             raise e
 
 def handler(job):
+    load_model() #here?
     job_input = job["input"]
 
     # Lightweight health check to verify GPU visibility and driver status
@@ -110,6 +119,6 @@ def handler(job):
     return {"image": base64.b64encode(buffered.getvalue()).decode("utf-8")}
 
 # Pre-load the model before starting the serverless loop
-load_model()
+#load_model()
 
 runpod.serverless.start({"handler": handler})
