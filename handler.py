@@ -1,4 +1,5 @@
 import os
+import torchvision # Must be imported before torch/diffusers to register custom operators
 import torch
 import runpod
 import shutil

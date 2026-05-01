@@ -10,7 +10,7 @@ RUN pip install uv
 
 # Install dependencies
 COPY requirements.txt /requirements.txt
-RUN uv pip install --upgrade -r /requirements.txt --no-cache-dir --system
+RUN uv pip install -r /requirements.txt --no-cache-dir --system
 
 # Add files
 #ADD handler.py .
