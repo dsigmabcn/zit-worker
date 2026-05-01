@@ -2,20 +2,20 @@ import os
 import torchvision # Must be imported before torch/diffusers to register custom operators
 import torch
 import runpod
-import shutil
 import base64
 import psutil
 from io import BytesIO
-from diffusers import ZImagePipeline
+from diffusers import ZImagePipeline, ZImageImg2ImgPipeline, ZImageInpaintPipeline
 
 pipe = None
 
 def configure_hf_cache():
+    ''' idea is to see if the model is saved somewhere in cache
+    '''
     if os.path.isdir("/runpod-volume"):
         cache_root = "/runpod-volume/.cache/huggingface"
     else:
         cache_root = "/tmp/.cache/huggingface"
-
     hub_cache = os.path.join(cache_root, "hub")
     os.makedirs(hub_cache, exist_ok=True)
 
@@ -27,98 +27,104 @@ def configure_hf_cache():
 
 
 
-def get_diagnostics():
-    """Prints system telemetry to logs to check for bottlenecks."""
-    print("--- System Diagnostics ---")
-    print(f"CPU count: {os.cpu_count()}")
-    print(f"RAM Total: {psutil.virtual_memory().total/1e9:.2f} GB")
-    print(f"RAM Available: {psutil.virtual_memory().available/1e9:.2f} GB")
-    if torch.cuda.is_available():
-        print(f"CUDA: {torch.version.cuda} | GPU: {torch.cuda.get_device_name(0)}")
-        print(f"GPU VRAM Total: {torch.cuda.get_device_properties(0).total_memory/1e9:.2f} GB")
-    else:
-        print("⚠️ CUDA NOT DETECTED")
-    print("--------------------------")
-
-def check_disk_space(required_gb=25):
-    """Checks if the local container disk has enough space for copying."""
-    stats = shutil.disk_usage("/")
-    free_gb = stats.free / (1024**3)
-    print(f"📊 Local Disk Space: {free_gb:.2f} GB free")
-    return free_gb >= required_gb
+#def get_diagnostics():
+#    """Prints system telemetry to logs to check for bottlenecks."""
+#    print("--- System Diagnostics ---")
+#    print(f"CPU count: {os.cpu_count()}")
+#    print(f"RAM Total: {psutil.virtual_memory().total/1e9:.2f} GB")
+#    print(f"RAM Available: {psutil.virtual_memory().available/1e9:.2f} GB")
+#    if torch.cuda.is_available():
+#        print(f"CUDA: {torch.version.cuda} | GPU: {torch.cuda.get_device_name(0)}")
+#        print(f"GPU VRAM Total: {torch.cuda.get_device_properties(0).total_memory/1e9:.2f} GB")
+#    else:
+#        print("⚠️ CUDA NOT DETECTED")
+#    print("--------------------------")
 
 def load_model():
     global pipe
     if pipe is None:
-        #get_diagnostics() # Run diagnostics on startup
-        
-        network_path = "/runpod-volume/models/z-image-turbo"
-        local_path = "/models/z-image-turbo"
+        configure_hf_cache()
         hf_repo = "Tongyi-MAI/Z-Image-Turbo"
-        
-        # Determine the best source
-        # Check if network drive exists AND has files in it
+        network_path = "/runpod-volume/models/z-image-turbo"
         use_network = os.path.exists(network_path) and any(os.scandir(network_path))
+        load_source = network_path if use_network else hf_repo
+
+        print(f"🛰️ Loading Base Pipeline from: {load_source}")
         
-        load_source = hf_repo # Default fallback
+        # Load the base Text-to-Image pipeline
+        pipe = ZImagePipeline.from_pretrained(
+            load_source,
+            torch_dtype=torch.bfloat16,
+            local_files_only=use_network,
+            low_cpu_mem_usage=True,
+            use_safetensors=True
+        )
+        pipe.to("cuda")
 
-        if use_network:
-            print("📁 Network drive detected with content.")
-            # Try to move to local SSD for speed
-            load_source = network_path
-        else:
-            print("🌐 Network drive empty or missing. Falling back to Hugging Face download.")
-            load_source = hf_repo
+def decode_base64_to_image(base64_string):
+    image_data = base64.b64decode(base64_string)
+    return Image.open(BytesIO(image_data)).convert("RGB")
 
-        # Load the pipeline
-        print(f"🛰️ Loading Pipeline from: {load_source}")
-        try:
-            configure_hf_cache()
-            pipe = ZImagePipeline.from_pretrained(
-                load_source,
-                torch_dtype=torch.bfloat16,
-                # local_files_only must be False if we might pull from HF
-                #local_files_only=(load_source != hf_repo),
-                local_files_only=use_network,
-                low_cpu_mem_usage=False,
-            )
-            
-            # Critical fix for the addmm error from your previous logs
-            pipe.to("cuda")
-            pipe.transformer.to("cuda")
-            
-            print("🔥 Model is live and hot!")
-        except Exception as e:
-            print(f"❌ CRITICAL ERROR LOADING MODEL: {e}")
-            raise e
-
+        
 def handler(job):
-    load_model() #here?
+    # Ensure model is loaded (safety check, though we call it at bottom)
+    load_model()
+    
     job_input = job["input"]
+    prompt = job_input.get("prompt")
+    steps = job_input.get("steps", 4)
+    strength = job_input.get("strength", 0.7)
+    seed = job_input.get("seed")
+    
+    # Handle Optional Inputs
+    input_image_b64 = job_input.get("image")
+    mask_image_b64 = job_input.get("mask_image")
 
-    # Lightweight health check to verify GPU visibility and driver status
-    if job_input.get("check_health"):
-        return {
-            "status": "ready",
-            "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "FAILED",
-            "cuda_version": torch.version.cuda if torch.cuda.is_available() else None,
-            "ram_available_gb": psutil.virtual_memory().available/1e9
-        }
-    
+    # Set generator for reproducibility
+    generator = torch.Generator("cuda").manual_seed(seed) if seed is not None else None
+
     with torch.inference_mode():
-        image = pipe(
-            prompt=job_input.get("prompt"),
-            height=1024,
-            width=1024,
-            num_inference_steps=job_input.get("steps", 9),
-            guidance_scale=0.0,
-        ).images[0]
-    
+        # TASK 1: Inpainting
+        if input_image_b64 and mask_image_b64:
+            print("🖌️ Task: Inpainting")
+            inpaint_pipe = ZImageInpaintPipeline.from_pipe(pipe)
+            image = inpaint_pipe(
+                prompt=prompt,
+                image=decode_base64_to_image(input_image_b64),
+                mask_image=decode_base64_to_image(mask_image_b64),
+                num_inference_steps=steps,
+                generator=generator
+            ).images[0]
+
+        # TASK 2: Image-to-Image
+        elif input_image_b64:
+            print("🖼️ Task: Image-to-Image")
+            i2i_pipe = ZImageImg2ImgPipeline.from_pipe(pipe)
+            image = i2i_pipe(
+                prompt=prompt,
+                image=decode_base64_to_image(input_image_b64),
+                strength=strength,
+                num_inference_steps=steps,
+                generator=generator
+            ).images[0]
+
+        # TASK 3: Text-to-Image (Default)
+        else:
+            print("📝 Task: Text-to-Image")
+            image = pipe(
+                prompt=prompt,
+                height=job_input.get("height", 1024),
+                width=job_input.get("width", 1024),
+                num_inference_steps=steps,
+                guidance_scale=job_input.get("guidance", 0.0),
+                generator=generator
+            ).images[0]
+
+    # Encode Result
     buffered = BytesIO()
     image.save(buffered, format="PNG")
     return {"image": base64.b64encode(buffered.getvalue()).decode("utf-8")}
 
-# Pre-load the model before starting the serverless loop
-#load_model()
-
+# PRE-LOAD before the listener starts
+load_model()
 runpod.serverless.start({"handler": handler})
