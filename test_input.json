@@ -1,5 +1,8 @@
 {
   "input": {
-    "name": "John Doe"
+    "prompt": "pixel art style, a cute small dragon sitting on a gold pile, vibrant colors, 8-bit aesthetic.",
+    "steps": 9,
+    "guidance_scale": 0.0,
+    "seed": 12345
   }
 }

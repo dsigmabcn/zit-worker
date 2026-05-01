@@ -84,12 +84,16 @@ def load_model():
             raise e
 
 def handler(job):
-    try:
-        load_model()
-    except Exception as e:
-        return {"error": f"Model failed to initialize: {str(e)}"}
-
     job_input = job["input"]
+
+    # Lightweight health check to verify GPU visibility and driver status
+    if job_input.get("check_health"):
+        return {
+            "status": "ready",
+            "gpu": torch.cuda.get_device_name(0) if torch.cuda.is_available() else "FAILED",
+            "cuda_version": torch.version.cuda if torch.cuda.is_available() else None,
+            "ram_available_gb": psutil.virtual_memory().available/1e9
+        }
     
     with torch.inference_mode():
         image = pipe(
@@ -103,5 +107,8 @@ def handler(job):
     buffered = BytesIO()
     image.save(buffered, format="PNG")
     return {"image": base64.b64encode(buffered.getvalue()).decode("utf-8")}
+
+# Pre-load the model before starting the serverless loop
+load_model()
 
 runpod.serverless.start({"handler": handler})
