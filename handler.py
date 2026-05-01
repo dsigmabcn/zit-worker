@@ -6,57 +6,48 @@ import base64
 import psutil
 from io import BytesIO
 from diffusers import ZImagePipeline, ZImageImg2ImgPipeline, ZImageInpaintPipeline
+from PIL import Image
 
 pipe = None
 
 def configure_hf_cache():
-    ''' idea is to see if the model is saved somewhere in cache
-    '''
-    if os.path.isdir("/runpod-volume"):
-        cache_root = "/runpod-volume/.cache/huggingface"
-    else:
+    # RunPod Serverless Model Caching standard path
+    cache_root = "/runpod-volume/huggingface-cache"
+    
+    # Fallback for local testing
+    if not os.path.exists("/runpod-volume"):
         cache_root = "/tmp/.cache/huggingface"
-    hub_cache = os.path.join(cache_root, "hub")
-    os.makedirs(hub_cache, exist_ok=True)
 
     os.environ["HF_HOME"] = cache_root
-    os.environ["HF_HUB_CACHE"] = hub_cache
+    os.environ["HF_HUB_CACHE"] = os.path.join(cache_root, "hub")
+    
+    # IMPORTANT: Force offline mode if you want to ensure NO downloads happen
+    # os.environ["HF_HUB_OFFLINE"] = "1"
     print("HF_HOME =", os.environ["HF_HOME"])
     print("HF_HUB_CACHE =", os.environ["HF_HUB_CACHE"])
     print("Has /runpod-volume:", os.path.isdir("/runpod-volume"))
 
 
-
-#def get_diagnostics():
-#    """Prints system telemetry to logs to check for bottlenecks."""
-#    print("--- System Diagnostics ---")
-#    print(f"CPU count: {os.cpu_count()}")
-#    print(f"RAM Total: {psutil.virtual_memory().total/1e9:.2f} GB")
-#    print(f"RAM Available: {psutil.virtual_memory().available/1e9:.2f} GB")
-#    if torch.cuda.is_available():
-#        print(f"CUDA: {torch.version.cuda} | GPU: {torch.cuda.get_device_name(0)}")
-#        print(f"GPU VRAM Total: {torch.cuda.get_device_properties(0).total_memory/1e9:.2f} GB")
-#    else:
-#        print("⚠️ CUDA NOT DETECTED")
-#    print("--------------------------")
-
 def load_model():
     global pipe
     if pipe is None:
         configure_hf_cache()
-        hf_repo = "Tongyi-MAI/Z-Image-Turbo"
-        network_path = "/runpod-volume/models/z-image-turbo"
-        use_network = os.path.exists(network_path) and any(os.scandir(network_path))
-        load_source = network_path if use_network else hf_repo
-
-        print(f"🛰️ Loading Base Pipeline from: {load_source}")
         
-        # Load the base Text-to-Image pipeline
+        hf_repo = "Tongyi-MAI/Z-Image-Turbo"
+        
+        # Check if RunPod has symlinked the cached model into the volume
+        # The docs state cached models follow the HF structure here:
+        cache_path = os.path.join(os.environ["HF_HUB_CACHE"], "models--Tongyi-MAI--Z-Image-Turbo")
+        
+        print(f"🛰️ Checking for cached model at: {cache_path}")
+        
+        # If the directory exists, we use local_files_only to speed up the check
+        is_cached = os.path.exists(cache_path)
+
         pipe = ZImagePipeline.from_pretrained(
-            load_source,
+            hf_repo,
             torch_dtype=torch.bfloat16,
-            local_files_only=use_network,
-            low_cpu_mem_usage=True,
+            local_files_only=is_cached, # Use the cache if it's there!
             use_safetensors=True
         )
         pipe.to("cuda")
