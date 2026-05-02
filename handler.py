@@ -109,7 +109,7 @@ def handler(job):
     steps = job_input.get("steps", 4)
     strength = job_input.get("strength", 0.7)
     seed = job_input.get("seed")
-    guidance_scale=job_input.get("guidance", 0.0),
+    guidance_scale=job_input.get("guidance", 0.0)
     
     input_image_b64 = job_input.get("image")
     mask_image_b64 = job_input.get("mask_image")
