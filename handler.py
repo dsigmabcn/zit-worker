@@ -89,7 +89,7 @@ def load_model():
 
         # Performance Knobs for Blackwell / 1024x1024 stability
         pipe.enable_attention_slicing()
-        pipe.enable_vae_slicing()
+        #pipe.enable_vae_slicing()
         
         # Pre-initialize specialized pipelines once
         print("🛠️ Pre-initializing specialized pipelines...")
