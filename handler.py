@@ -130,7 +130,8 @@ def handler(job):
         elif input_image_b64:
             image = i2i_pipe(
                 prompt=prompt,
-                image=decode_base64_to_image(input_image_b64),
+                #image=decode_base64_to_image(input_image_b64),
+                image=input_image_b64,
                 strength=strength,
                 num_inference_steps=steps,
                 guidance_scale=guidance_scale,
