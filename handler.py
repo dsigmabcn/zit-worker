@@ -34,13 +34,20 @@ def configure_hf_cache():
 def resolve_snapshot_path(repo_id):
     """
     Finds the actual snapshot directory in the RunPod cache.
-    Structure: .../hub/models--org--repo/snapshots/{hash}/
+    Hugging Face normalizes folder names to lowercase.
     """
-    org_repo = repo_id.replace("/", "--")
+    # Force lowercase to match the actual file system structure
+    org_repo = repo_id.replace("/", "--").lower()
     base_path = f"/runpod-volume/huggingface-cache/hub/models--{org_repo}/snapshots/*"
+    print(f"🔍 Looking for snapshots in: {base_path}")
     
     snapshots = glob.glob(base_path)
-    return snapshots[0] if snapshots else None
+    
+    # Sort to get the most recent snapshot if multiple exist
+    if snapshots:
+        snapshots.sort(key=os.path.getmtime, reverse=True)
+        return snapshots[0]
+    return None
 
 def load_model():
     global pipe, i2i_pipe, inpaint_pipe
