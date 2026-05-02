@@ -109,6 +109,7 @@ def handler(job):
     steps = job_input.get("steps", 4)
     strength = job_input.get("strength", 0.7)
     seed = job_input.get("seed")
+    guidance_scale=job_input.get("guidance", 0.0),
     
     input_image_b64 = job_input.get("image")
     mask_image_b64 = job_input.get("mask_image")
@@ -122,6 +123,7 @@ def handler(job):
                 image=decode_base64_to_image(input_image_b64),
                 mask_image=decode_base64_to_image(mask_image_b64),
                 num_inference_steps=steps,
+                guidance_scale=guidance_scale,
                 generator=generator
             ).images[0]
 
@@ -131,6 +133,7 @@ def handler(job):
                 image=decode_base64_to_image(input_image_b64),
                 strength=strength,
                 num_inference_steps=steps,
+                guidance_scale=guidance_scale,
                 generator=generator
             ).images[0]
 
@@ -140,7 +143,7 @@ def handler(job):
                 height=job_input.get("height", 1024),
                 width=job_input.get("width", 1024),
                 num_inference_steps=steps,
-                guidance_scale=job_input.get("guidance", 0.0),
+                guidance_scale=guidance_scale,
                 generator=generator
             ).images[0]
 
