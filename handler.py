@@ -123,7 +123,7 @@ def handler(job):
 
     generator = torch.Generator("cuda").manual_seed(seed) if seed is not None else None
 
-    with torch.inference_mode():
+'''    with torch.inference_mode():
         if input_image_b64 and mask_image_b64:
             image = inpaint_pipe(
                 prompt=prompt,
@@ -156,7 +156,62 @@ def handler(job):
 
     buffered = BytesIO()
     image.save(buffered, format="PNG")
-    return {"image": base64.b64encode(buffered.getvalue()).decode("utf-8")}
+    return {"image": base64.b64encode(buffered.getvalue()).decode("utf-8")}'''
+
+    with torch.inference_mode():
+        if input_image_b64 and mask_image_b64:
+            image = inpaint_pipe(
+                prompt=prompt,
+                image=decode_base64_to_image(input_image_b64),
+                mask_image=decode_base64_to_image(mask_image_b64),
+                num_inference_steps=steps,
+                guidance_scale=guidance_scale,
+                generator=generator,
+                output_type="latent"
+            ).images[0]
+
+        elif input_image_b64:
+            image = i2i_pipe(
+                prompt=prompt,
+                image=decode_base64_to_image(input_image_b64),                
+                strength=strength,
+                num_inference_steps=steps,
+                guidance_scale=guidance_scale,
+                generator=generator,
+                output_type="latent"
+            ).images[0]
+
+        else:
+            image = pipe(
+                prompt=prompt,
+                height=job_input.get("height", 1024),
+                width=job_input.get("width", 1024),
+                num_inference_steps=steps,
+                guidance_scale=guidance_scale,
+                generator=generator,
+                output_type="latent"
+            ).images[0]
+
+        with torch.no_grad():
+            # Flux/SDXL pipelines usually have a 'decode_latents' or you use the VAE directly
+            #image_tensor = i2i_pipe.vae.decode(latents / i2i_pipe.vae.config.scaling_factor, return_dict=False)[0]
+            #image = i2i_pipe.image_processor.postprocess(image_tensor, output_type="pil")[0]
+            
+            needs_scaling = pipe.vae.config.scaling_factor
+            decoded = pipe.vae.decode(latents / needs_scaling, return_dict=False)[0]
+            image_pil = pipe.image_processor.postprocess(decoded, output_type="pil")[0]
+
+
+    img_buf = BytesIO()
+    image_pil.save(img_buf, format="PNG")
+    img_b64 = base64.b64encode(img_buf.getvalue()).decode("utf-8") 
+
+    lat_buf = BytesIO()
+    torch.save(latents.cpu(), lat_buf)
+    lat_b64 = base64.b64encode(lat_buf.getvalue()).decode("utf-8")
+   
+
+    return {"image": img_b64,"latent": lat_b64}
 
 # Listener start
 runpod.serverless.start({"handler": handler})
