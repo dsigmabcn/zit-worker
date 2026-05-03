@@ -108,61 +108,60 @@ def decode_base64_to_image(base64_string):
     return Image.open(BytesIO(image_data)).convert("RGB")
 
 def handler(job):
-    load_model()
-    
+    load_model()    
     job_input = job["input"]
-    # NEW: We tell the handler WHICH pipeline object to use and WHICH method
-    # Defaulting to 'pipe' (txt2img) if not specified
-    pipe_type = job_input.get("pipe_type", "base") 
+    pipe_type = job_input.get("pipe_type", "base")     # Defaulting to 'pipe' (txt2img) if not specified
     pipeline_args = job_input.get("pipeline_args", {})
+    if "prompt_embeds" in pipeline_args and isinstance(pipeline_args["prompt_embeds"], list):
+        # 1. Convert the main embeds you SENT
+        p_embeds = torch.tensor(pipeline_args["prompt_embeds"]).to(device="cuda", dtype=torch.bfloat16)
+        pipeline_args["prompt_embeds"] = p_embeds
+        print(f"✅ prompt_embeds converted. Shape: {p_embeds.shape}")
 
-    # Map strings to the actual global objects
-    target_pipe = {
-        "base": pipe,
-        "i2i": i2i_pipe,
-        "inpaint": inpaint_pipe
-    }.get(pipe_type)
+        # 2. THE CRITICAL FIX: Add the pooled embeds the model REQUIRES
+        # Z-Image/Flux models will crash without 'pooled_prompt_embeds'
+    #    if "pooled_prompt_embeds" not in pipeline_args:
+    #        batch_size = p_embeds.shape[0]
+    #        # Z-Image Turbo / Flux usually uses 768 for the pooled dimension
+    #        pipeline_args["pooled_prompt_embeds"] = torch.zeros((batch_size, 768), device="cuda", dtype=torch.bfloat16)
+    #        print("💡 Created dummy pooled_prompt_embeds to prevent pipeline crash")
+        
+    target_pipe = {"base": pipe,"i2i": i2i_pipe, "inpaint": inpaint_pipe}.get(pipe_type) # Maps the pipe to use
 
-    # 1. Process specific types that can't be JSON (Generators & Images)
+    # generator is created in the worker
     if "seed" in pipeline_args:
         seed = pipeline_args.pop("seed")
         pipeline_args["generator"] = torch.Generator("cuda").manual_seed(seed)
-
+    
+    # Image received as data b64 (in json) converted to image for pipeline
     for img_key in ["image", "mask_image"]:
-        if img_key in pipeline_args:
-            pipeline_args[img_key] = decode_base64_to_image(pipeline_args[img_key])
+        if img_key in pipeline_args:            
+            img_bytes = base64.b64decode(pipeline_args[img_key])
+            pipeline_args[img_key] = Image.open(BytesIO(img_bytes)).convert("RGB")
 
-
-    # 2. THE DYNAMIC EXECUTION
-    # This replaces your entire if/elif block. It calls whatever pipe you chose
-    # with whatever arguments you sent from your local script.
+    # EXECUTION
     with torch.inference_mode():
-        output = target_pipe(**pipeline_args, output_type="latent")
+        output = target_pipe(**pipeline_args, output_type="latent") #target pipe: pipe, i2i_pipe or inpaint_pipe
         latents = output.images[0]
-
-        # --- 2. Decode for Preview Image ---
-        needs_scaling = pipe.vae.config.scaling_factor
-        print(needs_scaling)
-        #needs_scaling = 1.0
-        # FIX: Ensure latents has a batch dimension [1, 16, H, W]
-        # If latents.ndim is 3, unsqueeze it to 4.
-        if latents.ndim == 3:
+        print(latents.ndim)
+        if latents.ndim == 3: #add another dim in the latent to be able to run the VAE decode in comfyui
             latents = latents.unsqueeze(0)
-        # Scale and decode
-        decoded = pipe.vae.decode(latents / needs_scaling, return_dict=False)[0]
+
+        needs_scaling = target_pipe.vae.config.scaling_factor      #scaling for ZIT
+        latents_scaled = latents / needs_scaling                   #scaling for ZIT 
+        decoded = pipe.vae.decode(latents_scaled, return_dict=False)[0]
         image_pil = pipe.image_processor.postprocess(decoded, output_type="pil")[0]
 
     # --- 3. Prepare Base64 Outputs ---
     # Image Encode
     img_buf = BytesIO()
     image_pil.save(img_buf, format="PNG")
-    img_b64 = base64.b64encode(img_buf.getvalue()).decode("utf-8") 
+    img_b64 = base64.b64encode(img_buf.getvalue()).decode("utf-8") #to be sent to comfyui
 
-    # Latent Encode (Raw Tensor)
-    latents_scaled = latents / needs_scaling
+    # Latent Encode (Raw Tensor)    
     lat_buf = BytesIO()
     torch.save(latents_scaled.cpu(), lat_buf)
-    lat_b64 = base64.b64encode(lat_buf.getvalue()).decode("utf-8")
+    lat_b64 = base64.b64encode(lat_buf.getvalue()).decode("utf-8") #to be sent to comfyui
    
     return {"image": img_b64, "latent": lat_b64}
 
