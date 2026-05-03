@@ -39,7 +39,7 @@ def resolve_snapshot_path(repo_id):
     # Force lowercase to match the actual file system structure
     org_repo = repo_id.replace("/", "--").lower()
     base_path = f"/runpod-volume/huggingface-cache/hub/models--{org_repo}/snapshots/*"
-    print(f"🔍 Looking for snapshots in: {base_path}")
+    print(f"Looking for snapshots in: {base_path}")
     
     snapshots = glob.glob(base_path)
     
@@ -114,7 +114,7 @@ def handler(job):
     pipeline_args = job_input.get("pipeline_args", {})
     if "prompt_embeds" in pipeline_args and isinstance(pipeline_args["prompt_embeds"], list):
         # 1. Convert the main embeds you SENT
-        p_embeds = torch.tensor(pipeline_args["prompt_embeds"]).to(device="cuda", dtype=torch.bfloat16)
+        p_embeds = torch.tensor(pipeline_args["prompt_embeds"]).to(device="cuda", dtype=torch.float32)
         pipeline_args["prompt_embeds"] = p_embeds
         print(f"✅ prompt_embeds converted. Shape: {p_embeds.shape}")
 
