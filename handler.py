@@ -77,7 +77,8 @@ def load_model():
         try:
             pipe = ZImagePipeline.from_pretrained(
                 load_source,
-                torch_dtype=torch.bfloat16,
+                #torch_dtype=torch.bfloat16,
+                torch_dtype=torch.float32,
                 local_files_only=is_offline,
                 use_safetensors=True
             )
@@ -87,7 +88,8 @@ def load_model():
             print(f"⚠️ Snapshot load failed: {e}. Falling back to standard lookup.")
             pipe = ZImagePipeline.from_pretrained(
                 hf_repo,
-                torch_dtype=torch.bfloat16,
+                #torch_dtype=torch.bfloat16,
+                torch_dtype=torch.float32,
                 local_files_only=False,
                 use_safetensors=True
             )
