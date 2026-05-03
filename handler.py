@@ -159,6 +159,8 @@ def handler(job):
 
         # --- 2. Decode for Preview Image ---
         needs_scaling = pipe.vae.config.scaling_factor
+        print(needs_scaling)
+        needs_scaling = 1.0
         # FIX: Ensure latents has a batch dimension [1, 16, H, W]
         # If latents.ndim is 3, unsqueeze it to 4.
         if latents.ndim == 3:
