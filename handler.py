@@ -160,7 +160,7 @@ def handler(job):
         # --- 2. Decode for Preview Image ---
         needs_scaling = pipe.vae.config.scaling_factor
         print(needs_scaling)
-        needs_scaling = 1.0
+        #needs_scaling = 1.0
         # FIX: Ensure latents has a batch dimension [1, 16, H, W]
         # If latents.ndim is 3, unsqueeze it to 4.
         if latents.ndim == 3:
@@ -176,8 +176,9 @@ def handler(job):
     img_b64 = base64.b64encode(img_buf.getvalue()).decode("utf-8") 
 
     # Latent Encode (Raw Tensor)
+    latents_scaled = latents / needs_scaling
     lat_buf = BytesIO()
-    torch.save(latents.cpu(), lat_buf)
+    torch.save(latents_scaled.cpu(), lat_buf)
     lat_b64 = base64.b64encode(lat_buf.getvalue()).decode("utf-8")
    
     return {"image": img_b64, "latent": lat_b64}
