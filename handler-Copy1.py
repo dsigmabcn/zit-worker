@@ -111,34 +111,51 @@ def handler(job):
     load_model()
     
     job_input = job["input"]
-    # NEW: We tell the handler WHICH pipeline object to use and WHICH method
-    # Defaulting to 'pipe' (txt2img) if not specified
-    pipe_type = job_input.get("pipe_type", "base") 
-    pipeline_args = job_input.get("pipeline_args", {})
+    prompt = job_input.get("prompt")
+    steps = job_input.get("steps", 4)
+    strength = job_input.get("strength", 0.7)
+    seed = job_input.get("seed")
+    guidance_scale = job_input.get("guidance", 0.0)
+    
+    input_image_b64 = job_input.get("image")
+    mask_image_b64 = job_input.get("mask_image")
 
-    # Map strings to the actual global objects
-    target_pipe = {
-        "base": pipe,
-        "i2i": i2i_pipe,
-        "inpaint": inpaint_pipe
-    }.get(pipe_type)
+    generator = torch.Generator("cuda").manual_seed(seed) if seed is not None else None
 
-    # 1. Process specific types that can't be JSON (Generators & Images)
-    if "seed" in pipeline_args:
-        seed = pipeline_args.pop("seed")
-        pipeline_args["generator"] = torch.Generator("cuda").manual_seed(seed)
-
-    for img_key in ["image", "mask_image"]:
-        if img_key in pipeline_args:
-            pipeline_args[img_key] = decode_base64_to_image(pipeline_args[img_key])
-
-
-    # 2. THE DYNAMIC EXECUTION
-    # This replaces your entire if/elif block. It calls whatever pipe you chose
-    # with whatever arguments you sent from your local script.
     with torch.inference_mode():
-        output = target_pipe(**pipeline_args, output_type="latent")
-        latents = output.images[0]
+        # --- 1. Generate Latents ---
+        if input_image_b64 and mask_image_b64:
+            latents = inpaint_pipe(
+                prompt=prompt,
+                image=decode_base64_to_image(input_image_b64),
+                mask_image=decode_base64_to_image(mask_image_b64),
+                num_inference_steps=steps,
+                guidance_scale=guidance_scale,
+                generator=generator,
+                output_type="latent"
+            ).images[0] # Note: diffusers still calls the key 'images' even for latents
+
+        elif input_image_b64:
+            latents = i2i_pipe(
+                prompt=prompt,
+                image=decode_base64_to_image(input_image_b64),                
+                strength=strength,
+                num_inference_steps=steps,
+                guidance_scale=guidance_scale,
+                generator=generator,
+                output_type="latent"
+            ).images[0]
+
+        else:
+            latents = pipe(
+                prompt=prompt,
+                height=job_input.get("height", 1024),
+                width=job_input.get("width", 1024),
+                num_inference_steps=steps,
+                guidance_scale=guidance_scale,
+                generator=generator,
+                output_type="latent"
+            ).images[0]
 
         # --- 2. Decode for Preview Image ---
         needs_scaling = pipe.vae.config.scaling_factor
