@@ -223,9 +223,9 @@ def handler(job):
                     if os.path.exists(tmp_path):
                         os.remove(tmp_path)
                     
-        except Exception as patch_e:
-            print(f"❌ Failed to load LoRA even with conversion: {patch_e}")
-            resolved_lora_path = None
+            except Exception as patch_e:
+                print(f"❌ Failed to load LoRA even with conversion: {patch_e}")
+                resolved_lora_path = None
 
     # 2. THE DYNAMIC EXECUTION
     # This replaces your entire if/elif block. It calls whatever pipe you chose
