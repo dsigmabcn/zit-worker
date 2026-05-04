@@ -1,13 +1,19 @@
+import sys
+# Prioritize local diffusers source if available (matching your test script)
+sys.path.insert(0, '/home/ohiom/diffusers/src')
+
 import os
 import glob
 import torchvision # Must be imported before torch/diffusers
 import torch
 import runpod
+import diffusers
 import base64
 from io import BytesIO
 from threading import Lock
 from diffusers import ZImagePipeline, ZImageImg2ImgPipeline, ZImageInpaintPipeline
 from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
 from PIL import Image
 
 # Global variables for persistence and performance
@@ -89,6 +95,10 @@ def load_model():
             return
 
         configure_hf_cache()
+        
+        # Debug: Verify which diffusers version and path we are actually using
+        print(f"📦 Diffusers version: {diffusers.__version__} from {diffusers.__file__}")
+
         hf_repo = "Tongyi-MAI/Z-Image-Turbo"
         
         # 1. Try to find the explicit snapshot path (Doc recommendation)
@@ -168,11 +178,25 @@ def handler(job):
     if resolved_lora_path:
         print(f"Loading LoRA weights from: {resolved_lora_path}")
         try:
-            pipe.load_lora_weights(resolved_lora_path)
-            print("LoRA weights loaded.")
+            # Attempt standard load first
+            pipe.load_lora_weights(resolved_lora_path, adapter_name="default")
+            print("✅ LoRA weights loaded successfully.")
+            print(pipe.get_list_adapters())
+
         except Exception as e:
-            print(f"❌ Failed to load LoRA: {e}")
-            resolved_lora_path = None # Reset so we don't try to unload
+            print(f"⚠️ Standard LoRA load failed: {e}")
+            try:
+                print("🛠️ Attempting manual sanitization patch (filtering DiT modulation keys)...")
+                # WORKAROUND: Load state_dict manually and strip DiT modulation keys 
+                # that cause KeyError in older diffusers versions.
+                state_dict = load_file(resolved_lora_path)
+                patched_dict = {k: v for k, v in state_dict.items() if "adaLN_modulation" not in k}
+                pipe.load_lora_weights(patched_dict, adapter_name="default")
+                print("✅ LoRA weights loaded with sanitization patch (modulation layers skipped).")
+                print(pipe.get_list_adapters())
+            except Exception as patch_e:
+                print(f"❌ Failed to load LoRA even with patch: {patch_e}")
+                resolved_lora_path = None # Reset so we don't try to unload
 
     # 2. THE DYNAMIC EXECUTION
     # This replaces your entire if/elif block. It calls whatever pipe you chose
