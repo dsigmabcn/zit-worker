@@ -2,6 +2,11 @@ import sys
 # Prioritize local diffusers source if available (matching your test script)
 sys.path.insert(0, '/home/ohiom/diffusers/src')
 
+from diffusers.loaders.lora_conversion_utils import _convert_non_diffusers_z_image_lora_to_diffusers
+from safetensors.torch import load_file
+import tempfile
+import os
+
 import os
 import glob
 import torchvision # Must be imported before torch/diffusers
@@ -186,17 +191,41 @@ def handler(job):
         except Exception as e:
             print(f"⚠️ Standard LoRA load failed: {e}")
             try:
-                print("🛠️ Attempting manual sanitization patch (filtering DiT modulation keys)...")
-                # WORKAROUND: Load state_dict manually and strip DiT modulation keys 
-                # that cause KeyError in older diffusers versions.
+                print("🛠️ Attempting conversion with DiT modulation key handling...")
+                
+                # Load the state dict
                 state_dict = load_file(resolved_lora_path)
-                patched_dict = {k: v for k, v in state_dict.items() if "adaLN_modulation" not in k}
-                pipe.load_lora_weights(patched_dict, adapter_name="default")
-                print("✅ LoRA weights loaded with sanitization patch (modulation layers skipped).")
-                print(pipe.get_list_adapters())
-            except Exception as patch_e:
-                print(f"❌ Failed to load LoRA even with patch: {patch_e}")
-                resolved_lora_path = None # Reset so we don't try to unload
+                
+                # Apply the proper conversion for Z Image format
+                try:
+                    converted_state_dict = _convert_non_diffusers_z_image_lora_to_diffusers(state_dict)
+                    print("✅ State dict converted successfully")
+                except Exception as convert_e:
+                    print(f"⚠️ Conversion failed ({convert_e}), attempting sanitization...")
+                    # Fallback: filter problematic keys
+                    converted_state_dict = {
+                        k: v for k, v in state_dict.items() 
+                        if "adaLN_modulation" not in k and "alpha" not in k
+                    }
+                
+                # Save converted dict to temporary file and load it
+                with tempfile.NamedTemporaryFile(suffix=".safetensors", delete=False) as tmp:
+                    tmp_path = tmp.name
+                
+                try:
+                    from safetensors.torch import save_file
+                    save_file(converted_state_dict, tmp_path)
+                    pipe.load_lora_weights(tmp_path, adapter_name="default")
+                    print("✅ LoRA weights loaded with conversion.")
+                    print(pipe.get_list_adapters())
+                finally:
+                    # Clean up temp file
+                    if os.path.exists(tmp_path):
+                        os.remove(tmp_path)
+                    
+        except Exception as patch_e:
+            print(f"❌ Failed to load LoRA even with conversion: {patch_e}")
+            resolved_lora_path = None
 
     # 2. THE DYNAMIC EXECUTION
     # This replaces your entire if/elif block. It calls whatever pipe you chose
