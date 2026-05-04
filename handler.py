@@ -7,6 +7,7 @@ import base64
 from io import BytesIO
 from threading import Lock
 from diffusers import ZImagePipeline, ZImageImg2ImgPipeline, ZImageInpaintPipeline
+from huggingface_hub import hf_hub_download
 from PIL import Image
 
 # Global variables for persistence and performance
@@ -47,6 +48,35 @@ def resolve_snapshot_path(repo_id):
         snapshots.sort(key=os.path.getmtime, reverse=True)
         return snapshots[0]
     return None
+
+def resolve_lora_path(lora_input):
+    """
+    Resolves a LoRA path. If it looks like an HF repo (e.g. 'user/repo/file.safetensors'),
+    it downloads it to the persistent runpod volume.
+    """
+    if not lora_input or not isinstance(lora_input, str):
+        return None
+
+    # If it's already an absolute path that exists, return it
+    if os.path.isabs(lora_input) and os.path.exists(lora_input):
+        return lora_input
+
+    # Check for 'repo_id/filename' pattern
+    parts = lora_input.split("/")
+    if len(parts) >= 3:
+        repo_id = "/".join(parts[:2])
+        filename = "/".join(parts[2:])
+        
+        lora_cache_dir = "/runpod-volume/loras"
+        os.makedirs(lora_cache_dir, exist_ok=True)
+        
+        local_path = os.path.join(lora_cache_dir, parts[0], parts[1], filename)
+        if not os.path.exists(local_path):
+            print(f"📥 Downloading LoRA {filename} from {repo_id}...")
+            return hf_hub_download(repo_id=repo_id, filename=filename, local_dir=os.path.dirname(local_path))
+        return local_path
+        
+    return lora_input
 
 def load_model():
     global pipe, i2i_pipe, inpaint_pipe
@@ -132,13 +162,17 @@ def handler(job):
             pipeline_args[img_key] = decode_base64_to_image(pipeline_args[img_key])
 
     # 2. Handle LoRA loading/unloading
-    lora_path = pipeline_args.pop("lora_path", None)
-    if lora_path:
-        print(f"Loading LoRA weights from: {lora_path}")
-        # Assuming pipe is the base pipeline and other pipes are derived
-        # or that loading on base pipe is sufficient.
-        pipe.load_lora_weights(lora_path)
-        print("LoRA weights loaded.")
+    raw_lora_input = pipeline_args.pop("lora_path", None)
+    resolved_lora_path = resolve_lora_path(raw_lora_input)
+
+    if resolved_lora_path:
+        print(f"Loading LoRA weights from: {resolved_lora_path}")
+        try:
+            pipe.load_lora_weights(resolved_lora_path)
+            print("LoRA weights loaded.")
+        except Exception as e:
+            print(f"❌ Failed to load LoRA: {e}")
+            resolved_lora_path = None # Reset so we don't try to unload
 
     # 2. THE DYNAMIC EXECUTION
     # This replaces your entire if/elif block. It calls whatever pipe you chose
@@ -159,7 +193,7 @@ def handler(job):
         decoded = pipe.vae.decode(latents / needs_scaling, return_dict=False)[0]
         image_pil = pipe.image_processor.postprocess(decoded, output_type="pil")[0]
 
-    if lora_path:
+    if resolved_lora_path:
         print("Unloading LoRA weights.")
         pipe.unload_lora_weights()
         print("LoRA weights unloaded.")
