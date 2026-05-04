@@ -131,6 +131,14 @@ def handler(job):
         if img_key in pipeline_args:
             pipeline_args[img_key] = decode_base64_to_image(pipeline_args[img_key])
 
+    # 2. Handle LoRA loading/unloading
+    lora_path = pipeline_args.pop("lora_path", None)
+    if lora_path:
+        print(f"Loading LoRA weights from: {lora_path}")
+        # Assuming pipe is the base pipeline and other pipes are derived
+        # or that loading on base pipe is sufficient.
+        pipe.load_lora_weights(lora_path)
+        print("LoRA weights loaded.")
 
     # 2. THE DYNAMIC EXECUTION
     # This replaces your entire if/elif block. It calls whatever pipe you chose
@@ -150,6 +158,11 @@ def handler(job):
         # Scale and decode
         decoded = pipe.vae.decode(latents / needs_scaling, return_dict=False)[0]
         image_pil = pipe.image_processor.postprocess(decoded, output_type="pil")[0]
+
+    if lora_path:
+        print("Unloading LoRA weights.")
+        pipe.unload_lora_weights()
+        print("LoRA weights unloaded.")
 
     # --- 3. Prepare Base64 Outputs ---
     # Image Encode
