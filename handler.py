@@ -183,10 +183,10 @@ def handler(job):
     if resolved_lora_path:
         print(f"Loading LoRA weights from: {resolved_lora_path}")
         try:
-            print(f"Loading LoRA weights from: {lora_path}")
+            print(f"Loading LoRA weights from: {resolved_lora_path}")
             # Use the native method directly, exactly like your test script.
             # Do NOT catch specific key errors to try and "fix" them manually.
-            pipe.load_lora_weights(lora_path)
+            pipe.load_lora_weights(resolved_lora_path)
             print("✅ LoRA loaded successfully using native loader.")
         except Exception as e:
             print(f"❌ Critical error loading LoRA: {str(e)}")
