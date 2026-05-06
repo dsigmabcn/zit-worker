@@ -165,8 +165,9 @@ def handler(job):
             pipeline_args[img_key] = decode_base64_to_image(pipeline_args[img_key])
 
     # 2. Handle LoRA loading/unloading
-    raw_lora_input = pipeline_args.pop("lora_path", None)
+    raw_lora_input = pipeline_args.pop("lora_path", None)    
     resolved_lora_path = resolve_lora_path(raw_lora_input)
+    lora_strength = pipeline_args.pop("lora_strength", 1.0)
 
     if resolved_lora_path:
         print(f"Loading LoRA weights from: {resolved_lora_path}")
@@ -175,17 +176,17 @@ def handler(job):
             
             print(f"Loading LoRA weights from: {resolved_lora_path}")
             valid_keys = set()
-            for k in state_dict.keys():
-                if k.endswith('.lora_down.weight'):
-                    base = k.replace('.lora_down.weight', '')
-                    if base + '.lora_up.weight' in state_dict:
-                        valid_keys.add(k)
-                        valid_keys.add(base + '.lora_up.weight')
-                        valid_keys.add(base + '.alpha')
-            state_dict = {k: v for k, v in state_dict.items() if k in valid_keys}
+            #for k in state_dict.keys():
+            #    if k.endswith('.lora_down.weight'):
+            #        base = k.replace('.lora_down.weight', '')
+            #        if base + '.lora_up.weight' in state_dict:
+            #            valid_keys.add(k)
+            #            valid_keys.add(base + '.lora_up.weight')
+            #            valid_keys.add(base + '.alpha')
+            #state_dict = {k: v for k, v in state_dict.items() if k in valid_keys}
             pipe.load_lora_weights(resolved_lora_path, adapter_name = "lora_loaded") #this is 'strange', we change dictionary, but still uses resolved lora path and works in latest version....
             #pipe.load_lora_weights(state_dict, adapter_name = "lora_loaded") #this is 'strange', we change dictionary, but still uses resolved lora path and works in latest version....
-            pipe.set_adapters(["lora_loaded"], adapter_weights=[1.0])
+            pipe.set_adapters(["lora_loaded"], adapter_weights=[lora_strength])
             print("✅ LoRA loaded successfully using native loader.")
         except Exception as e:
             print(f"❌ Critical error loading LoRA: {str(e)}")
