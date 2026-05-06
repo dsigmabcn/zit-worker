@@ -1,15 +1,7 @@
 import sys
-# Prioritize local diffusers source if available (matching your test script)
-#sys.path.insert(0, '/home/ohiom/diffusers/src')
-
-from diffusers.loaders.lora_conversion_utils import _convert_non_diffusers_z_image_lora_to_diffusers
-from safetensors.torch import load_file
-import tempfile
-import os
-
 import os
 import glob
-import torchvision # Must be imported before torch/diffusers
+import torchvision 
 import torch
 import runpod
 import diffusers
@@ -99,14 +91,10 @@ def load_model():
         if pipe is not None:
             return
 
-        configure_hf_cache()
-        
+        configure_hf_cache()        
         # Debug: Verify which diffusers version and path we are actually using
-        print(f"📦 Diffusers version: {diffusers.__version__} from {diffusers.__file__}")
-
-        hf_repo = "Tongyi-MAI/Z-Image-Turbo"
-        
-        # 1. Try to find the explicit snapshot path (Doc recommendation)
+        #print(f"📦 Diffusers version: {diffusers.__version__} from {diffusers.__file__}")
+        hf_repo = "Tongyi-MAI/Z-Image-Turbo"    
         snapshot_path = resolve_snapshot_path(hf_repo)
         
         if snapshot_path:
@@ -195,7 +183,9 @@ def handler(job):
                         valid_keys.add(base + '.lora_up.weight')
                         valid_keys.add(base + '.alpha')
             state_dict = {k: v for k, v in state_dict.items() if k in valid_keys}
-            pipe.load_lora_weights(resolved_lora_path)
+            #pipe.load_lora_weights(resolved_lora_path, adapter_name = "lora_loaded") #this is 'strange', we change dictionary, but still uses resolved lora path and works in latest version....
+            pipe.load_lora_weights(state_dict, adapter_name = "lora_loaded") #this is 'strange', we change dictionary, but still uses resolved lora path and works in latest version....
+            pipe.set_adapters(["lora_loaded"], adapter_weights=[1.0])
             print("✅ LoRA loaded successfully using native loader.")
         except Exception as e:
             print(f"❌ Critical error loading LoRA: {str(e)}")
