@@ -183,7 +183,11 @@ def handler(job):
     if resolved_lora_path:
         print(f"Loading LoRA weights from: {resolved_lora_path}")
         try:
+            state_dict = load_file(resolved_lora_path)
             print(f"Loading LoRA weights from: {resolved_lora_path}")
+            if not any(k.startswith("transformer.") for k in state_dict.keys()):
+                print("🔄 Re-mapping keys to transformer namespace...")
+                state_dict = {f"transformer.{k}": v for k, v in state_dict.items()}
             # Use the native method directly, exactly like your test script.
             # Do NOT catch specific key errors to try and "fix" them manually.
             pipe.load_lora_weights(resolved_lora_path)
