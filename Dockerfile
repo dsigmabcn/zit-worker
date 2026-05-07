@@ -19,7 +19,9 @@ RUN uv pip install -r /requirements.txt --no-cache-dir --system
 
 # Add files
 #ADD handler.py .
-COPY handler.py /handler.py
+#COPY handler.py /handler.py
+# Copy all python files at once
+COPY *.py /
 
 # Run the handler
 #CMD python -u /handler.py
