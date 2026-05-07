@@ -1,12 +1,16 @@
+import sys
 import os
 import glob
-import torchvision # Must be imported before torch/diffusers
+import torchvision 
 import torch
 import runpod
+import diffusers
 import base64
 from io import BytesIO
 from threading import Lock
 from diffusers import ZImagePipeline, ZImageImg2ImgPipeline, ZImageInpaintPipeline
+from huggingface_hub import hf_hub_download
+from safetensors.torch import load_file
 from PIL import Image
 
 # Global variables for persistence and performance
@@ -27,7 +31,6 @@ def configure_hf_cache():
     os.environ["HF_HUB_CACHE"] = os.path.join(cache_root, "hub")
     os.makedirs(os.environ["HF_HUB_CACHE"], exist_ok=True)
     
-    # Official docs suggest these for strictly cached environments
     os.environ["HF_HUB_OFFLINE"] = "1" if os.path.exists("/runpod-volume/huggingface-cache/hub") else "0"
     print(f"HF_HOME: {os.environ['HF_HOME']} | Offline Mode: {os.environ['HF_HUB_OFFLINE']}")
 
@@ -49,6 +52,35 @@ def resolve_snapshot_path(repo_id):
         return snapshots[0]
     return None
 
+def resolve_lora_path(lora_input):
+    """
+    Resolves a LoRA path. If it looks like an HF repo (e.g. 'user/repo/file.safetensors'),
+    it downloads it to the persistent runpod volume.
+    """
+    if not lora_input or not isinstance(lora_input, str):
+        return None
+
+    # If it's already an absolute path that exists, return it
+    if os.path.isabs(lora_input) and os.path.exists(lora_input):
+        return lora_input
+
+    # Check for 'repo_id/filename' pattern
+    parts = lora_input.split("/")
+    if len(parts) >= 3:
+        repo_id = "/".join(parts[:2])
+        filename = "/".join(parts[2:])
+        
+        lora_cache_dir = "/runpod-volume/loras"
+        os.makedirs(lora_cache_dir, exist_ok=True)
+        
+        local_path = os.path.join(lora_cache_dir, parts[0], parts[1], filename)
+        if not os.path.exists(local_path):
+            print(f"📥 Downloading LoRA {filename} from {repo_id}...")
+            return hf_hub_download(repo_id=repo_id, filename=filename, local_dir=os.path.dirname(local_path))
+        return local_path
+        
+    return lora_input
+
 def load_model():
     global pipe, i2i_pipe, inpaint_pipe
     
@@ -59,10 +91,10 @@ def load_model():
         if pipe is not None:
             return
 
-        configure_hf_cache()
-        hf_repo = "Tongyi-MAI/Z-Image-Turbo"
-        
-        # 1. Try to find the explicit snapshot path (Doc recommendation)
+        configure_hf_cache()        
+        # Debug: Verify which diffusers version and path we are actually using
+        #print(f"📦 Diffusers version: {diffusers.__version__} from {diffusers.__file__}")
+        hf_repo = "Tongyi-MAI/Z-Image-Turbo"    
         snapshot_path = resolve_snapshot_path(hf_repo)
         
         if snapshot_path:
@@ -111,51 +143,62 @@ def handler(job):
     load_model()
     
     job_input = job["input"]
-    prompt = job_input.get("prompt")
-    steps = job_input.get("steps", 4)
-    strength = job_input.get("strength", 0.7)
-    seed = job_input.get("seed")
-    guidance_scale = job_input.get("guidance", 0.0)
-    
-    input_image_b64 = job_input.get("image")
-    mask_image_b64 = job_input.get("mask_image")
+    # NEW: We tell the handler WHICH pipeline object to use and WHICH method
+    # Defaulting to 'pipe' (txt2img) if not specified
+    pipe_type = job_input.get("pipe_type", "base") 
+    pipeline_args = job_input.get("pipeline_args", {})
 
-    generator = torch.Generator("cuda").manual_seed(seed) if seed is not None else None
+    # Map strings to the actual global objects
+    target_pipe = {
+        "base": pipe,
+        "i2i": i2i_pipe,
+        "inpaint": inpaint_pipe
+    }.get(pipe_type)
 
+    # 1. Process specific types that can't be JSON (Generators & Images)
+    if "seed" in pipeline_args:
+        seed = pipeline_args.pop("seed")
+        pipeline_args["generator"] = torch.Generator("cuda").manual_seed(seed)
+
+    for img_key in ["image", "mask_image"]:
+        if img_key in pipeline_args:
+            pipeline_args[img_key] = decode_base64_to_image(pipeline_args[img_key])
+
+    # 2. Handle LoRA loading/unloading
+    raw_lora_input = pipeline_args.pop("lora_path", None)    
+    resolved_lora_path = resolve_lora_path(raw_lora_input)
+    lora_strength = pipeline_args.pop("lora_strength", 1.0)
+
+    if resolved_lora_path:
+        print(f"Loading LoRA weights from: {resolved_lora_path}")
+        try:
+            state_dict = load_file(resolved_lora_path)
+            
+            print(f"Loading LoRA weights from: {resolved_lora_path}")
+            valid_keys = set()
+            #for k in state_dict.keys():
+            #    if k.endswith('.lora_down.weight'):
+            #        base = k.replace('.lora_down.weight', '')
+            #        if base + '.lora_up.weight' in state_dict:
+            #            valid_keys.add(k)
+            #            valid_keys.add(base + '.lora_up.weight')
+            #            valid_keys.add(base + '.alpha')
+            #state_dict = {k: v for k, v in state_dict.items() if k in valid_keys}
+            pipe.load_lora_weights(resolved_lora_path, adapter_name = "lora_loaded") #this is 'strange', we change dictionary, but still uses resolved lora path and works in latest version....
+            #pipe.load_lora_weights(state_dict, adapter_name = "lora_loaded") #this is 'strange', we change dictionary, but still uses resolved lora path and works in latest version....
+            pipe.set_adapters(["lora_loaded"], adapter_weights=[lora_strength])
+            print("✅ LoRA loaded successfully using native loader.")
+        except Exception as e:
+            print(f"❌ Critical error loading LoRA: {str(e)}")
+            # If this fails, there is a genuine incompatibility or a path issue.
+            raise e
+
+    # 2. THE DYNAMIC EXECUTION
+    # This replaces your entire if/elif block. It calls whatever pipe you chose
+    # with whatever arguments you sent from your local script.
     with torch.inference_mode():
-        # --- 1. Generate Latents ---
-        if input_image_b64 and mask_image_b64:
-            latents = inpaint_pipe(
-                prompt=prompt,
-                image=decode_base64_to_image(input_image_b64),
-                mask_image=decode_base64_to_image(mask_image_b64),
-                num_inference_steps=steps,
-                guidance_scale=guidance_scale,
-                generator=generator,
-                output_type="latent"
-            ).images[0] # Note: diffusers still calls the key 'images' even for latents
-
-        elif input_image_b64:
-            latents = i2i_pipe(
-                prompt=prompt,
-                image=decode_base64_to_image(input_image_b64),                
-                strength=strength,
-                num_inference_steps=steps,
-                guidance_scale=guidance_scale,
-                generator=generator,
-                output_type="latent"
-            ).images[0]
-
-        else:
-            latents = pipe(
-                prompt=prompt,
-                height=job_input.get("height", 1024),
-                width=job_input.get("width", 1024),
-                num_inference_steps=steps,
-                guidance_scale=guidance_scale,
-                generator=generator,
-                output_type="latent"
-            ).images[0]
+        output = target_pipe(**pipeline_args, output_type="latent")
+        latents = output.images[0]
 
         # --- 2. Decode for Preview Image ---
         needs_scaling = pipe.vae.config.scaling_factor
@@ -168,6 +211,11 @@ def handler(job):
         # Scale and decode
         decoded = pipe.vae.decode(latents / needs_scaling, return_dict=False)[0]
         image_pil = pipe.image_processor.postprocess(decoded, output_type="pil")[0]
+
+    if resolved_lora_path:
+        print("Unloading LoRA weights.")
+        pipe.unload_lora_weights()
+        print("LoRA weights unloaded.")
 
     # --- 3. Prepare Base64 Outputs ---
     # Image Encode
