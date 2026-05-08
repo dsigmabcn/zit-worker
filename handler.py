@@ -4,17 +4,17 @@ from utils import configure_hf_cache
 
 # 1. Global Configuration
 configure_hf_cache()
-MODEL_TYPE = os.environ.get("MODEL_TYPE", "z_image").lower()
+MODEL_TYPE = os.environ.get("MODEL_NAME", "z_image").lower()
 
 # 2. Pre-initialize the engine at the module level
 # This happens when the container starts, before the handler is ever called.
 def initialize_engine():
-    if MODEL_TYPE == "z_image":
+    if MODEL_TYPE == "tongyi-mai/z-image-turbo":
         from zit import ZImageEngine
         engine_instance = ZImageEngine()
-    #elif MODEL_TYPE == "flux":
-    #    from engines.flux import FluxEngine
-     #   engine_instance = FluxEngine()
+    elif MODEL_TYPE == "wan-ai/wan2.2-i2v-a14b-diffusers"":
+        from wan22_I2V.py import WanVideoEngine
+        engine_instance = WanVideoEngine()
     else:
         raise ValueError(f"Unknown MODEL_TYPE: {MODEL_TYPE}")
     
