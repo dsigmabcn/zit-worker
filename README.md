@@ -1,48 +1,33 @@
-![RunPod Worker Template](https://cpjrphpz3t5wbwfe.public.blob.vercel-storage.com/worker-template_banner-zUuCAjwDuvfsINR6vKBhYvvm3TnZFB.jpeg)
+Runpod serverless worker for image and video generation.
+Run ComfyUI (localy), but generate the images (sample them) with a GPU from Runpod
 
 ---
-
-This repository serves as a starting point for creating your own custom RunPod Serverless worker. It provides a basic structure and configuration that you can build upon.
-
----
-
+Based and modified from the runpod template
 [![RunPod](https://api.runpod.io/badge/runpod-workers/worker-template)](https://www.runpod.io/console/hub/runpod-workers/worker-template)
 
 ---
 
-## Getting Started
+## Why this worker/template
 
-1.  **Use this template:** Create a new repository based on this template or clone it directly.
-2.  **Customize:** Modify the code and configuration files to implement your specific task.
-3.  **Test:** Run your worker locally to ensure it functions correctly.
-4.  **Deploy:** Connect your repository to RunPod or build and push the Docker image manually.
+1. You want to run ComfyUI locally, but generate the image/video (inference) in a more powerful or faster GPU (better that your computer)
+2. Run workflows that contain different models and may overload your GPU (e.g. run image model, then Image to Video)
+3. Pay only for 'generation time', not pod time
 
-## Customizing Your Worker
+## Limitations
+1. In reality, you do not only pay for generation time: machine needs to start up (load the container), download models, run, etc. There are some 'tricks' (e.g. cached models) that minimize the cold start, but to be charged 'only inference time' is not possible. 
+2. Diffusers are used for inference, which eventually provide different results than using the KSampler of Comfyui
+3. For the moment, limited models are suitable
 
-- **`handler.py`:** This is the core of your worker.
-  - The `handler(event)` function is the entry point executed for each job.
-  - The `event` dictionary contains the job input under the `"input"` key.
-  - Modify this function to load your models, process the input and return the desired output.
-  - Consider implementing model loading outside the handler (e.g., globally or in an initialization function) if models are large and reused across jobs.
-- **`requirements.txt`:** Add any Python libraries your worker needs to this file. These will be installed via `uv` when the Docker image is built.
-- **`Dockerfile`:**
-  - This file defines the Docker image for your worker.
-  - It starts from a [RunPod base image (`runpod/base`)](https://github.com/runpod/containers/tree/main/official-templates/base) which includes CUDA, mulitple versions of python, uv, jupyter notebook and common dependencies.
-  - It installs dependencies from `requirements.txt` using `uv`.
-  - It copies your `src` directory into the image.
-  - You might need to add system dependencies (`apt-get install ...`), environment variables (`ENV`), or other setup steps here if required by your specific application.
-- **`test_input.json`:** Modify this file to provide relevant sample input for local testing.
+## Suitable
+- Z-image Turbo (more or less tested)
+- Wan 2.1/2.2 (development)
 
-## Testing Locally
 
-You can test your handler logic locally using the RunPod Python SDK. For detailed steps on setting up your local environment (creating a virtual environment, installing dependencies) and running the handler, please refer to the [RunPod Serverless Get Started Guide](https://docs.runpod.io/serverless/get-started).
+## How to use it
 
-1.  **Prepare Input:** Modify `test_input.json` with relevant sample input for your handler.
-2.  **Run the Handler:**
-    ```bash
-    python handler.py
-    ```
-    This will execute your `handler` function with the contents of [`test_input.json`](/test_input.json) as input.
+[TO BE DONE] 
+
+
 
 ## Deploying to RunPod
 

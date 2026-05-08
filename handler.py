@@ -12,7 +12,7 @@ def initialize_engine():
     if MODEL_TYPE == "tongyi-mai/z-image-turbo":
         from zit import ZImageEngine
         engine_instance = ZImageEngine()
-    elif MODEL_TYPE == "wan-ai/wan2.2-i2v-a14b-diffusers"":
+    elif MODEL_TYPE == "wan-ai/wan2.2-i2v-a14b-diffusers":
         from wan22_I2V.py import WanVideoEngine
         engine_instance = WanVideoEngine()
     else:

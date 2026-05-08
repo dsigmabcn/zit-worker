@@ -40,6 +40,9 @@ class WanVideoEngine(BaseEngine):
         )
         
         self.pipe.to("cuda")
+        # Memory optimizations for large 14B models
+        self.pipe.enable_attention_slicing()
+        self.pipe.enable_vae_slicing()
 
         print(f"🚀 Wan I2V Video Engine ({hf_repo}) successfully loaded.")
 
@@ -52,13 +55,18 @@ class WanVideoEngine(BaseEngine):
             seed = pipeline_args.pop("seed")
             pipeline_args["generator"] = torch.Generator("cuda").manual_seed(seed)
 
-        # 2. Handle Conditioning Image (Required for I2V)
+        # Pop LoRA args to prevent passing them to the pipeline __call__
+        pipeline_args.pop("lora_path", None)
+        pipeline_args.pop("lora_strength", 1.0)
+
+        # 2. Image Decoding (Wan 2.1 I2V requires 'image')
         if "image" in pipeline_args:
             pipeline_args["image"] = decode_base64_to_image(pipeline_args["image"])
+        else:
+            raise ValueError("An input 'image' is required for Wan I2V.")
         
-        # Ensure prompt is present (even if empty)
-        if "prompt" not in pipeline_args:
-            pipeline_args["prompt"] = ""
+        pipeline_args.setdefault("prompt", "")
+        pipeline_args.setdefault("negative_prompt", "low quality, blurry, distorted, low resolution, noisy")
 
         # 3. Run Inference
         with torch.inference_mode():
@@ -66,12 +74,20 @@ class WanVideoEngine(BaseEngine):
             output = self.pipe(**pipeline_args)
             video_frames = output.frames[0] 
 
-        # 4. Prepare Outputs
-        # Export generated frames to a temporary MP4 file
-        with tempfile.NamedTemporaryFile(suffix=".mp4") as tmp:
-            export_to_video(video_frames, tmp.name, fps=16)
-            with open(tmp.name, "rb") as f:
+        # 5. Safe Video Export
+        # We use delete=False to ensure the file exists for reading
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
+                tmp_path = tmp.name
+                # Note: Wan 2.1 is optimized for 16fps
+                export_to_video(video_frames, tmp_path, fps=16)
+            
+            with open(tmp_path, "rb") as f:
                 video_b64 = base64.b64encode(f.read()).decode("utf-8")
+        finally:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
 
         # Return the first frame as a preview image
         img_buf = BytesIO()

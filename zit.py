@@ -66,6 +66,9 @@ class ZImageEngine(BaseEngine):
             "i2i": self.i2i_pipe,
             "inpaint": self.inpaint_pipe
         }.get(pipe_type)
+        
+        if target_pipe is None:
+            raise ValueError(f"Invalid pipe_type: {pipe_type}. Expected 'base', 'i2i', or 'inpaint'.")
 
         # 1. Handle Seed/Generator
         if "seed" in pipeline_args:
@@ -96,7 +99,10 @@ class ZImageEngine(BaseEngine):
             if latents.ndim == 3:
                 latents = latents.unsqueeze(0)
             
-            decoded = self.pipe.vae.decode(latents / scaling_factor, return_dict=False)[0]
+            # Apply scaling once
+            latents = latents / scaling_factor
+            
+            decoded = self.pipe.vae.decode(latents, return_dict=False)[0]
             image_pil = self.pipe.image_processor.postprocess(decoded, output_type="pil")[0]
 
         # 5. Cleanup LoRA
@@ -108,9 +114,8 @@ class ZImageEngine(BaseEngine):
         image_pil.save(img_buf, format="PNG")
         img_b64 = base64.b64encode(img_buf.getvalue()).decode("utf-8") 
 
-        latents_scaled = latents / scaling_factor
         lat_buf = BytesIO()
-        torch.save(latents_scaled.cpu(), lat_buf)
+        torch.save(latents.cpu(), lat_buf)
         lat_b64 = base64.b64encode(lat_buf.getvalue()).decode("utf-8")
         
         return {"image": img_b64, "latent": lat_b64}

@@ -4,6 +4,7 @@ from huggingface_hub import hf_hub_download
 from io import BytesIO
 from PIL import Image
 import base64
+import tempfile
 
 
 def configure_hf_cache():
@@ -69,3 +70,15 @@ def resolve_lora_path(lora_input):
 def decode_base64_to_image(base64_string):
     image_data = base64.b64decode(base64_string)
     return Image.open(BytesIO(image_data)).convert("RGB")
+
+
+
+def decode_base64_to_video_path(base64_string):
+    """Saves base64 video data to a temporary file and returns the path."""
+    video_data = base64.b64decode(base64_string)
+    # We use delete=False so the pipeline can access the path; 
+    # remember to cleanup in the handler's 'finally' block.
+    temp_video = tempfile.NamedTemporaryFile(suffix=".mp4", delete=False)
+    temp_video.write(video_data)
+    temp_video.close()
+    return temp_video.name
