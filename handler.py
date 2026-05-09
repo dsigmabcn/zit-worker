@@ -4,7 +4,7 @@ from utils import configure_hf_cache
 
 # 1. Global Configuration
 configure_hf_cache()
-MODEL_TYPE = os.environ.get("MODEL_NAME", "z_image").lower()
+MODEL_TYPE = os.environ.get("MODEL_NAME", "tongyi-mai/z-image-turbo").lower()
 
 # 2. Pre-initialize the engine at the module level
 # This happens when the container starts, before the handler is ever called.
