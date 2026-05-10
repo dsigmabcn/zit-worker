@@ -81,7 +81,6 @@ class WanVideoEngine(BaseEngine):
             video_frames = output.frames[0] 
             print("video frames in variable")
 
-
         
         frames_b64 = []
         for frame in video_frames:            
