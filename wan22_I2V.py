@@ -21,20 +21,19 @@ class WanVideoEngine(BaseEngine):
         if self.pipe is not None:
             return
 
-        # Model ID for Wan 2.1 I2V (e.g., 14B-720P-Diffusers or 1.3B-480P-Diffusers)
         hf_repo = os.environ.get("MODEL_NAME", "Wan-AI/Wan2.2-I2V-A14B-Diffusers")
         snapshot_path = resolve_snapshot_path(hf_repo)
-        
-        self._patch_missing_configs(hf_repo, snapshot_path) #running the stupid patch
-        
+              
         if snapshot_path:
             print(f"🛰️ Cached snapshot found at: {snapshot_path}")
             load_source = snapshot_path
             is_offline = True
+            self._patch_missing_configs(hf_repo, snapshot_path) #running the stupid patch
         else:
             print("ℹ️ Cache miss. Using Repo ID.")
             load_source = hf_repo
             is_offline = False
+
 
         # Load the Wan Pipeline
         self.pipe = WanImageToVideoPipeline.from_pretrained(
@@ -141,8 +140,12 @@ class WanVideoEngine(BaseEngine):
                         filename=filename,
                         subfolder=subfolder,
                         local_dir=snapshot_path,
-                        local_dir_use_symlinks=False,
-                        cache_dir="/tmp/hf_cache"
+                        cache_dir="/tmp/hf_cache",
                     )
+                    # Verify it actually landed
+                    if os.path.exists(local_file):
+                        print(f"✅ Successfully patched: {file_path}")
+                    else:
+                        print(f"❌ Patch failed silently: {file_path}")
                 except Exception as e:
                     print(f"⚠️ Failed to patch {file_path}: {e}")
