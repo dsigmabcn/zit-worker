@@ -45,7 +45,7 @@ class WanVideoEngine(BaseEngine):
         self.pipe.to("cuda")
         # Memory optimizations for large 14B models
         self.pipe.enable_attention_slicing()
-        self.pipe.enable_vae_slicing()
+        #self.pipe.enable_vae_slicing()
 
         print(f"🚀 Wan I2V Video Engine ({hf_repo}) successfully loaded.")
 
