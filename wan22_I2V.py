@@ -7,6 +7,7 @@ from diffusers import WanImageToVideoPipeline
 from diffusers.utils import export_to_video
 from utils import resolve_snapshot_path, decode_base64_to_image
 from base_engine import BaseEngine
+from huggingface_hub import hf_hub_download
 
 class WanVideoEngine(BaseEngine):
     def __init__(self):
