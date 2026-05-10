@@ -82,32 +82,12 @@ class WanVideoEngine(BaseEngine):
             print("video frames in variable")
 
 
-        '''
-        # 5. Safe Video Export
-        # We use delete=False to ensure the file exists for reading
-        tmp_path = None
-        try:
-            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
-                tmp_path = tmp.name
-                # Note: Wan 2.1 is optimized for 16fps
-                export_to_video(video_frames, tmp_path, fps=fps)
-            
-            with open(tmp_path, "rb") as f:
-                video_b64 = base64.b64encode(f.read()).decode("utf-8")
-        finally:
-            if tmp_path and os.path.exists(tmp_path):
-                os.remove(tmp_path)
-
-        # Return the first frame as a preview image
-        img_buf = BytesIO()
-        video_frames[0].save(img_buf, format="PNG")
-        img_b64 = base64.b64encode(img_buf.getvalue()).decode("utf-8") 
-        
-        return {"video": video_b64, "image": img_b64}'''
         
         frames_b64 = []
         for frame in video_frames:            
             if isinstance(frame, np.ndarray):
+                print("is instance")
+                frame = (frame * 255).astype(np.uint8)
                 frame = Image.fromarray(frame.astype('uint8'))
             
             buf = BytesIO()
