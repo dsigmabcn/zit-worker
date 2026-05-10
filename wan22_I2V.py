@@ -140,7 +140,8 @@ class WanVideoEngine(BaseEngine):
                         filename=filename,
                         subfolder=subfolder,
                         local_dir=snapshot_path,
-                        cache_dir="/tmp/hf_cache",
+                        local_dir_use_symlinks=False,
+                        cache_dir="/tmp",
                     )
                     # Verify it actually landed
                     if os.path.exists(local_file):

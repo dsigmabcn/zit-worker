@@ -65,7 +65,7 @@ def run_serverless_mode():
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run engine in Serverless or Pod mode.")
     parser.add_argument("--pod_mode", action="store_true", help="Run as a persistent FastAPI web server")
-    parser.add_argument("--port", type=int, default=8000, help="Port for pod_mode")
+    parser.add_argument("--port", type=int, default=9000, help="Port for pod_mode")
     args = parser.parse_args()
 
     print(f"🚀 Initializing model: {MODEL_TYPE}...")
