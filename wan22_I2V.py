@@ -22,7 +22,7 @@ class WanVideoEngine(BaseEngine):
             return
 
         # Model ID for Wan 2.1 I2V (e.g., 14B-720P-Diffusers or 1.3B-480P-Diffusers)
-        hf_repo = os.environ.get("MODEL_NAME", "Wan-Video/Wan2.1-I2V-14B-720P-Diffusers")
+        hf_repo = os.environ.get("MODEL_NAME", "Wan-AI/Wan2.2-I2V-A14B-Diffusers")
         snapshot_path = resolve_snapshot_path(hf_repo)
         
         self._patch_missing_configs(hf_repo, snapshot_path) #running the stupid patch
