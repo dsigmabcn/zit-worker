@@ -142,7 +142,7 @@ class WanVideoEngine(BaseEngine):
                         subfolder=subfolder,
                         local_dir=snapshot_path,
                         local_dir_use_symlinks=False
-                        cache_fir="tmp/hf_cache"
+                        cache_dir="/tmp/hf_cache"
                     )
                 except Exception as e:
                     print(f"⚠️ Failed to patch {file_path}: {e}")
