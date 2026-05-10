@@ -19,7 +19,7 @@ def initialize_engine():
         raise ValueError(f"Unknown MODEL_TYPE: {MODEL_TYPE}")
     
     # Perform the heavy VRAM loading here
-    engine_instance.load()
+    #engine_instance.load()
     return engine_instance
 
 # Global engine variable
@@ -27,6 +27,7 @@ active_engine = initialize_engine()
 
 # 3. The Handler (Now very lightweight)
 def handler(job):
+    engine_instance.load()
     # active_engine is already loaded and ready in VRAM
     try:
         return active_engine.execute(job["input"])
