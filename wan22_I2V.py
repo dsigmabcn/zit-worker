@@ -141,7 +141,7 @@ class WanVideoEngine(BaseEngine):
                         filename=filename,
                         subfolder=subfolder,
                         local_dir=snapshot_path,
-                        local_dir_use_symlinks=False
+                        local_dir_use_symlinks=False,
                         cache_dir="/tmp/hf_cache"
                     )
                 except Exception as e:
