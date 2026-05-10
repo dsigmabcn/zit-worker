@@ -76,7 +76,10 @@ class WanVideoEngine(BaseEngine):
         with torch.inference_mode():
             # Wan I2V returns frames[0] as a list of PIL images representing the video
             output = self.pipe(**pipeline_args)
+            print("inference complete")
             video_frames = output.frames[0] 
+            print("video frames in variable")
+
 
         '''
         # 5. Safe Video Export
@@ -100,10 +103,13 @@ class WanVideoEngine(BaseEngine):
         img_b64 = base64.b64encode(img_buf.getvalue()).decode("utf-8") 
         
         return {"video": video_b64, "image": img_b64}'''
+        
         frames_b64 = []
-        for frame in video_frames:
+        for frame in video_frames:            
+            if isinstance(frame, np.ndarray):
+                frame = Image.fromarray(frame.astype('uint8'))
+            
             buf = BytesIO()
-            # Using PNG for lossless quality
             frame.save(buf, format="PNG")
             frames_b64.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
 
