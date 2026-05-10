@@ -8,6 +8,8 @@ from diffusers.utils import export_to_video
 from utils import resolve_snapshot_path, decode_base64_to_image
 from base_engine import BaseEngine
 from huggingface_hub import hf_hub_download
+import numpy as np
+from PIL import Image
 
 class WanVideoEngine(BaseEngine):
     def __init__(self):
@@ -106,8 +108,8 @@ class WanVideoEngine(BaseEngine):
         
         frames_b64 = []
         for frame in video_frames:            
-            if isinstance(frame, np.ndarray):
-                frame = Image.fromarray(frame.astype('uint8'))
+            #if isinstance(frame, np.ndarray):
+            #    frame = Image.fromarray(frame.astype('uint8'))
             
             buf = BytesIO()
             frame.save(buf, format="PNG")
