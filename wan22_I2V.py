@@ -22,6 +22,8 @@ class WanVideoEngine(BaseEngine):
         hf_repo = os.environ.get("MODEL_NAME", "Wan-Video/Wan2.1-I2V-14B-720P-Diffusers")
         snapshot_path = resolve_snapshot_path(hf_repo)
         
+        self._patch_missing_configs(hf_repo, snapshot_path) #running the stupid patch
+        
         if snapshot_path:
             print(f"🛰️ Cached snapshot found at: {snapshot_path}")
             load_source = snapshot_path
@@ -95,3 +97,30 @@ class WanVideoEngine(BaseEngine):
         img_b64 = base64.b64encode(img_buf.getvalue()).decode("utf-8") 
         
         return {"video": video_b64, "image": img_b64}
+
+    def _patch_missing_configs(self, hf_repo, snapshot_path):
+        """to fix stupid bug when downloading the repo from hugginface"""
+        if not snapshot_path:
+            return
+
+        # List of critical files needed for the MoE architecture to initialize
+        missing_files = [
+            "transformer_2/config.json",
+            "transformer_2/diffusion_pytorch_model.safetensors.index.json"
+        ]
+        
+        for file_path in missing_files:
+            local_file = os.path.join(snapshot_path, file_path)
+            if not os.path.exists(local_file):
+                print(f"🛠️ Patching missing file: {file_path}")
+                try:
+                    subfolder, filename = os.path.split(file_path)
+                    hf_hub_download(
+                        repo_id=hf_repo,
+                        filename=filename,
+                        subfolder=subfolder,
+                        local_dir=snapshot_path,
+                        local_dir_use_symlinks=False
+                    )
+                except Exception as e:
+                    print(f"⚠️ Failed to patch {file_path}: {e}")
