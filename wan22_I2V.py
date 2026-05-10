@@ -108,8 +108,8 @@ class WanVideoEngine(BaseEngine):
         
         frames_b64 = []
         for frame in video_frames:            
-            #if isinstance(frame, np.ndarray):
-            #    frame = Image.fromarray(frame.astype('uint8'))
+            if isinstance(frame, np.ndarray):
+                frame = Image.fromarray(frame.astype('uint8'))
             
             buf = BytesIO()
             frame.save(buf, format="PNG")
