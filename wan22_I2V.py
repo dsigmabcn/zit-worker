@@ -53,9 +53,8 @@ class WanVideoEngine(BaseEngine):
         """Processes the Image-to-Video generation request."""
         pipeline_args = job_input.get("pipeline_args", {})
 
-        fps = pipeline_args.pop("fps", 16)
+        #fps = pipeline_args.pop("fps", 16)
 
-        # 1. Handle Seed/Generator
         if "seed" in pipeline_args:
             seed = pipeline_args.pop("seed")
             pipeline_args["generator"] = torch.Generator("cuda").manual_seed(seed)
@@ -79,6 +78,7 @@ class WanVideoEngine(BaseEngine):
             output = self.pipe(**pipeline_args)
             video_frames = output.frames[0] 
 
+        '''
         # 5. Safe Video Export
         # We use delete=False to ensure the file exists for reading
         tmp_path = None
@@ -99,7 +99,17 @@ class WanVideoEngine(BaseEngine):
         video_frames[0].save(img_buf, format="PNG")
         img_b64 = base64.b64encode(img_buf.getvalue()).decode("utf-8") 
         
-        return {"video": video_b64, "image": img_b64}
+        return {"video": video_b64, "image": img_b64}'''
+        frames_b64 = []
+        for frame in video_frames:
+            buf = BytesIO()
+            # Using PNG for lossless quality
+            frame.save(buf, format="PNG")
+            frames_b64.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+
+        # 4. Return the frames
+        return {"frames": frames_b64}
+
 
     def _patch_missing_configs(self, hf_repo, snapshot_path):
         """to fix stupid bug when downloading the repo from hugginface"""
