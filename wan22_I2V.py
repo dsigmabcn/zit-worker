@@ -53,6 +53,8 @@ class WanVideoEngine(BaseEngine):
         """Processes the Image-to-Video generation request."""
         pipeline_args = job_input.get("pipeline_args", {})
 
+        fps = pipeline_args.pop("fps", 16)
+
         # 1. Handle Seed/Generator
         if "seed" in pipeline_args:
             seed = pipeline_args.pop("seed")
@@ -84,7 +86,7 @@ class WanVideoEngine(BaseEngine):
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp:
                 tmp_path = tmp.name
                 # Note: Wan 2.1 is optimized for 16fps
-                export_to_video(video_frames, tmp_path, fps=16)
+                export_to_video(video_frames, tmp_path, fps=fps)
             
             with open(tmp_path, "rb") as f:
                 video_b64 = base64.b64encode(f.read()).decode("utf-8")
