@@ -31,7 +31,7 @@ def handler(job):
     try:
         job_input = job.get("input", {})
         result = active_engine.execute(job_input)
-         if inspect.isgenerator(result):
+        if inspect.isgenerator(result):
             for item in result:
                 yield item
         else:            
