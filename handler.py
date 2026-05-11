@@ -59,7 +59,7 @@ def run_pod_mode(port: int):
 def run_serverless_mode():
     """Starts the RunPod serverless worker."""
     print("☁️ Starting in SERVERLESS MODE")
-    runpod.serverless.start({"handler": handler})
+    runpod.serverless.start({"handler": handler, "return_aggregate_stream": True})
 
 # 6. Entry Point
 if __name__ == "__main__":

@@ -71,8 +71,6 @@ def decode_base64_to_image(base64_string):
     image_data = base64.b64decode(base64_string)
     return Image.open(BytesIO(image_data)).convert("RGB")
 
-
-
 def decode_base64_to_video_path(base64_string):
     """Saves base64 video data to a temporary file and returns the path."""
     video_data = base64.b64decode(base64_string)

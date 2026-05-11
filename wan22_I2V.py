@@ -83,7 +83,7 @@ class WanVideoEngine(BaseEngine):
 
         
         frames_b64 = []
-        for frame in video_frames:            
+        '''for frame in video_frames:            
             if isinstance(frame, np.ndarray):
                 print("is instance")
                 frame = (frame * 255).astype(np.uint8)
@@ -91,7 +91,12 @@ class WanVideoEngine(BaseEngine):
             
             buf = BytesIO()
             frame.save(buf, format="PNG")
-            frames_b64.append(base64.b64encode(buf.getvalue()).decode("utf-8"))
+            frames_b64.append(base64.b64encode(buf.getvalue()).decode("utf-8"))'''
+        for i, frame in enumerate(video_frames):
+            buf = BytesIO()
+            frame.save(buf, format="PNG")
+            frame_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
+            yield {"frame": frame_b64, "index": i, "total": len(video_frames)}
 
         # 4. Return the frames
         return {"frames": frames_b64}
