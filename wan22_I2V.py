@@ -64,7 +64,7 @@ class WanVideoEngine(BaseEngine):
         pipeline_args.pop("lora_path", None)
         pipeline_args.pop("lora_strength", 1.0)
 
-        # 2. Image Decoding (Wan 2.1 I2V requires 'image')
+        # 2. Image Decoding (Wan 2.2 I2V requires 'image')
         if "image" in pipeline_args:
             pipeline_args["image"] = decode_base64_to_image(pipeline_args["image"])
         else:
@@ -93,6 +93,8 @@ class WanVideoEngine(BaseEngine):
             frame.save(buf, format="PNG")
             frames_b64.append(base64.b64encode(buf.getvalue()).decode("utf-8"))'''
         for i, frame in enumerate(video_frames):
+            if isinstance(frame, np.ndarray):
+                frame = Image.fromarray((frame * 255).astype(np.uint8) if frame.max() <= 1.0 else frame.astype(np.uint8))
             buf = BytesIO()
             frame.save(buf, format="PNG")
             frame_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
