@@ -3,6 +3,7 @@ import runpod
 from utils import configure_hf_cache
 import sys
 import argparse
+import inspect
 
 # 1. Global Configuration
 configure_hf_cache()
@@ -29,7 +30,14 @@ def handler(job):
     """The standard RunPod handler format."""
     try:
         job_input = job.get("input", {})
-        return active_engine.execute(job_input)
+        result = active_engine.execute(job_input)
+         if inspect.isgenerator(result):
+            for item in result:
+                yield item
+        else:            
+            return result
+
+#        return active_engine.execute(job_input)
     except Exception as e:
         print(f"❌ Execution Error: {str(e)}")
         return {"error": str(e), "status": "failed"}
