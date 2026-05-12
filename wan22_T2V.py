@@ -27,7 +27,7 @@ class WanVideoEngine(BaseEngine):
             print(f"🛰️ Cached snapshot found at: {snapshot_path}")
             load_source = snapshot_path
             is_offline = True
-            #self._patch_missing_configs(hf_repo, snapshot_path) #running the stupid patch --> To check if needed
+            self._patch_missing_configs(hf_repo, snapshot_path) #running the stupid patch --> To check if needed
         else:
             print("ℹ️ Cache miss. Using Repo ID.")
             load_source = hf_repo
