@@ -3,7 +3,7 @@ import base64
 import tempfile
 import os
 from io import BytesIO
-from diffusers import WanImageToVideoPipeline
+from diffusers import WanPipeline
 from diffusers.utils import export_to_video
 from utils import resolve_snapshot_path, decode_base64_to_image
 from base_engine import BaseEngine
@@ -16,18 +16,18 @@ class WanVideoEngine(BaseEngine):
         super().__init__()
         self.pipe = None
 
-    def load(self):
+    def load(self):        
         if self.pipe is not None:
             return
 
-        hf_repo = os.environ.get("MODEL_NAME", "Wan-AI/Wan2.2-I2V-A14B-Diffusers")
+        hf_repo = os.environ.get("MODEL_NAME", "Wan-AI/Wan2.2-T2V-A14B-Diffusers")
         snapshot_path = resolve_snapshot_path(hf_repo)
               
         if snapshot_path:
             print(f"🛰️ Cached snapshot found at: {snapshot_path}")
             load_source = snapshot_path
             is_offline = True
-            self._patch_missing_configs(hf_repo, snapshot_path) #running this patch because it looks cached model Runpod does not have some files
+            #self._patch_missing_configs(hf_repo, snapshot_path) #running the stupid patch --> To check if needed
         else:
             print("ℹ️ Cache miss. Using Repo ID.")
             load_source = hf_repo
@@ -35,7 +35,7 @@ class WanVideoEngine(BaseEngine):
 
 
         # Load the Wan Pipeline
-        self.pipe = WanImageToVideoPipeline.from_pretrained(
+        self.pipe = WanPipeline.from_pretrained(
             load_source,
             torch_dtype=torch.bfloat16,
             local_files_only=is_offline,
@@ -47,7 +47,7 @@ class WanVideoEngine(BaseEngine):
         self.pipe.enable_attention_slicing()
         #self.pipe.enable_vae_slicing()
 
-        print(f"🚀 Wan I2V Video Engine ({hf_repo}) successfully loaded.")
+        print(f"🚀 Wan T2V Video Engine ({hf_repo}) successfully loaded.")
 
     def execute(self, job_input):
         pipeline_args = job_input.get("pipeline_args", {})
@@ -61,10 +61,12 @@ class WanVideoEngine(BaseEngine):
         pipeline_args.pop("lora_strength", 1.0)
 
         # 2. Image Decoding (Wan 2.2 I2V requires 'image')
+        ### WE DO NOT NEED image ###
         if "image" in pipeline_args:
-            pipeline_args["image"] = decode_base64_to_image(pipeline_args["image"])
-        else:
-            raise ValueError("An input 'image' is required for Wan I2V.")
+            raise ValueError("Text to Video Model, no image has to be plugged needed") # to think if we want an error or we just 'skip' image
+            #pipeline_args["image"] = decode_base64_to_image(pipeline_args["image"])
+        #else:
+        #    raise ValueError("An input 'image' is required for Wan I2V.")
         
         pipeline_args.setdefault("prompt", "")
         pipeline_args.setdefault("negative_prompt", "low quality, blurry, distorted, low resolution, noisy")
@@ -90,7 +92,7 @@ class WanVideoEngine(BaseEngine):
         # 4. Return the frames
         return {"frames": frames_b64}
 
-
+    #I do not know if we need the patch for T2V
     def _patch_missing_configs(self, hf_repo, snapshot_path):
         """to fix stupid bug when downloading the repo from hugginface"""
         if not snapshot_path:

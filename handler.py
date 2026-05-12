@@ -18,6 +18,10 @@ def initialize_engine():
     elif MODEL_TYPE == "wan-ai/wan2.2-i2v-a14b-diffusers":
         from wan22_I2V import WanVideoEngine
         engine_instance = WanVideoEngine()
+    elif MODEL_TYPE == "wan-ai/wan2.2-t2v-a14b-diffusers":
+        from wan22_T2V import WanVideoEngine
+        engine_instance = WanVideoEngine()
+        #for the moment, separated scripts/handlers, to combine later?#
     else:
         raise ValueError(f"Unknown MODEL_TYPE: {MODEL_TYPE}")
     
