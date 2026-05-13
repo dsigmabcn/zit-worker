@@ -71,12 +71,10 @@ class WanVideoEngine(BaseEngine):
 
         # 3. Run Inference
         with torch.inference_mode():
-            # Wan I2V returns frames[0] as a list of PIL images representing the video
+            print("running inference")
             output = self.pipe(**pipeline_args)
             print("inference complete")
             video_frames = output.frames[0] 
-            print("video frames in variable")
-
         
         frames_b64 = []
         for i, frame in enumerate(video_frames):

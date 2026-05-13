@@ -63,7 +63,8 @@ class WanVideoEngine(BaseEngine):
         # 2. Image Decoding (Wan 2.2 I2V requires 'image')
         ### WE DO NOT NEED image ###
         if "image" in pipeline_args:
-            raise ValueError("Text to Video Model, no image has to be plugged needed") # to think if we want an error or we just 'skip' image
+            yield {"error": "this is a Text to video model. Disconnect image input or change to image-to-video model"}
+            return
             #pipeline_args["image"] = decode_base64_to_image(pipeline_args["image"])
         #else:
         #    raise ValueError("An input 'image' is required for Wan I2V.")
@@ -89,8 +90,9 @@ class WanVideoEngine(BaseEngine):
             frame_b64 = base64.b64encode(buf.getvalue()).decode("utf-8")
             yield {"frame": frame_b64, "index": i, "total": len(video_frames)}
 
+        
         # 4. Return the frames
-        return {"frames": frames_b64}
+        #return {"frames": frames_b64}
 
     #I do not know if we need the patch for T2V
     def _patch_missing_configs(self, hf_repo, snapshot_path):
