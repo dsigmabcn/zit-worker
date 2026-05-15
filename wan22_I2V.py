@@ -5,7 +5,7 @@ import os
 from io import BytesIO
 from diffusers import WanImageToVideoPipeline
 from diffusers.utils import export_to_video
-from utils import resolve_snapshot_path, decode_base64_to_image
+from utils import resolve_snapshot_path, decode_base64_to_image, resolve_lora_path
 from base_engine import BaseEngine
 from huggingface_hub import hf_hub_download
 import numpy as np
@@ -57,8 +57,15 @@ class WanVideoEngine(BaseEngine):
             pipeline_args["generator"] = torch.Generator("cuda").manual_seed(seed)
 
         # Pop LoRA args to prevent passing them to the pipeline __call__
-        pipeline_args.pop("lora_path", None)
-        pipeline_args.pop("lora_strength", 1.0)
+        #pipeline_args.pop("lora_path", None)
+        #pipeline_args.pop("lora_strength", 1.0)
+        raw_lora_input = pipeline_args.pop("lora_path", None)    
+        resolved_lora_path = resolve_lora_path(raw_lora_input)
+        lora_strength = pipeline_args.pop("lora_strength", 1.0)
+        if resolved_lora_path:
+            print(f"Loading LoRA: {resolved_lora_path}")
+            self.pipe.load_lora_weights(resolved_lora_path, adapter_name="lora_loaded")
+            self.pipe.set_adapters(["lora_loaded"], adapter_weights=[lora_strength])
 
         # 2. Image Decoding (Wan 2.2 I2V requires 'image')
         if "image" in pipeline_args:
@@ -76,6 +83,10 @@ class WanVideoEngine(BaseEngine):
             print("inference complete")
             video_frames = output.frames[0] 
         
+        # Cleanup LoRA
+        if resolved_lora_path:
+            self.pipe.unload_lora_weights()
+
         frames_b64 = []
         for i, frame in enumerate(video_frames):
             if isinstance(frame, np.ndarray):
