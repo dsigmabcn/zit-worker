@@ -60,12 +60,14 @@ class WanVideoEngine(BaseEngine):
         # Pop LoRA args to prevent passing them to the pipeline __call__
         #pipeline_args.pop("lora_path", None)
         #pipeline_args.pop("lora_strength", 1.0)
-        self.pipe.unload_lora_weights() #to make sure lora weights are not loaded
+        
         raw_lora_input = pipeline_args.pop("lora_path", None)    
         resolved_lora_path = resolve_lora_path(raw_lora_input)
         lora_strength = pipeline_args.pop("lora_strength", 1.0)
         if resolved_lora_path:
             print(f"Loading LoRA: {resolved_lora_path}")
+            if ADAPTER_NAME in getattr(self.pipe, "active_adapters", []): # If it's already there, just delete the old weights first
+                self.pipe.delete_adapters(ADAPTER_NAME)
             self.pipe.load_lora_weights(resolved_lora_path, adapter_name="lora_loaded")
             self.pipe.set_adapters(["lora_loaded"], adapter_weights=[lora_strength])
 
