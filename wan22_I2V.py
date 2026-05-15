@@ -56,9 +56,11 @@ class WanVideoEngine(BaseEngine):
             seed = pipeline_args.pop("seed")
             pipeline_args["generator"] = torch.Generator("cuda").manual_seed(seed)
 
+
         # Pop LoRA args to prevent passing them to the pipeline __call__
         #pipeline_args.pop("lora_path", None)
         #pipeline_args.pop("lora_strength", 1.0)
+        self.pipe.unload_lora_weights() #to make sure lora weights are not loaded
         raw_lora_input = pipeline_args.pop("lora_path", None)    
         resolved_lora_path = resolve_lora_path(raw_lora_input)
         lora_strength = pipeline_args.pop("lora_strength", 1.0)
@@ -75,6 +77,8 @@ class WanVideoEngine(BaseEngine):
         
         pipeline_args.setdefault("prompt", "")
         pipeline_args.setdefault("negative_prompt", "low quality, blurry, distorted, low resolution, noisy")
+        boundary_ratio = pipeline_args.pop("boundary_ratio", None)
+        self.pipe.boundary_ratio = boundary_ratio
 
         # 3. Run Inference
         with torch.inference_mode():
