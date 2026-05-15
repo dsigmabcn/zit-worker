@@ -79,8 +79,8 @@ class WanVideoEngine(BaseEngine):
         
         pipeline_args.setdefault("prompt", "")
         pipeline_args.setdefault("negative_prompt", "low quality, blurry, distorted, low resolution, noisy")
-        boundary_ratio = pipeline_args.pop("boundary_ratio", None)
-        self.pipe.boundary_ratio = boundary_ratio
+        self.pipe.register_to_config(boundary_ratio=pipeline_args.pop("boundary_ratio", None)) #handles boundary ratio
+
 
         # 3. Run Inference
         with torch.inference_mode():
